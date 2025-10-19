@@ -15,7 +15,6 @@ ADMIN_PASSWORD = os.environ.get("BOLT_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
-    """Loads logo as base64 for inline HTML display."""
     if os.path.exists(path):
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -23,7 +22,6 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
     return ""
 
 def read_data():
-    """Read and clean CSV."""
     if not os.path.exists(CSV_FILE):
         st.error(f"CSV file '{CSV_FILE}' not found. Please place it in this folder.")
         st.stop()
@@ -33,7 +31,6 @@ def read_data():
     return df
 
 def save_data(df: pd.DataFrame):
-    """Save back to CSV."""
     df.to_csv(CSV_FILE, index=False)
 
 # ---------- Page Setup ----------
@@ -58,7 +55,7 @@ st.markdown(
 # ---------- Load Data ----------
 df = read_data()
 
-# ---------- Flexible Column Detection ----------
+# ---------- Column Detection ----------
 def find_col(possible_names):
     for name in possible_names:
         if name in df.columns:
@@ -94,58 +91,60 @@ with st.sidebar:
         else:
             st.error("Incorrect password ❌")
 
-# ---------- Main Interface ----------
+# ---------- Initialize Session State for Clearing ----------
+if "form_submitted" not in st.session_state:
+    st.session_state.form_submitted = False
+
+def clear_form():
+    st.session_state.form_submitted = False
+    for key in list(st.session_state.keys()):
+        if key not in ["form_submitted"]:
+            st.session_state[key] = None
+
+# ---------- Main Form ----------
 st.subheader("Bolt Torquing Entry Form")
 
-# LINE NUMBER Dropdown
-if not col_line:
-    st.error("Column 'LINE NUMBER' not found in CSV.")
-    st.stop()
-line_options = sorted(df[col_line].dropna().unique().tolist())
-selected_line = st.selectbox("LINE NUMBER", line_options)
+with st.form("bolt_form", clear_on_submit=True):
+    # LINE NUMBER
+    line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
+    selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-# TEST PACK NUMBER (auto from selected line)
-testpack_value = ""
-if col_testpack and selected_line:
-    df_line = df[df[col_line] == selected_line]
-    testpacks = sorted(df_line[col_testpack].dropna().unique().tolist())
-    if testpacks:
-        testpack_value = testpacks[0]
-        st.write(f"**TEST PACK NUMBER:** {testpack_value}")
+    # TEST PACK (auto-detect)
+    testpack_value = ""
+    if col_testpack and selected_line:
+        df_line = df[df[col_line] == selected_line]
+        testpacks = sorted(df_line[col_testpack].dropna().unique().tolist())
+        if testpacks:
+            testpack_value = testpacks[0]
+            st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
-# ✅ BOLT TORQUING NUMBER(S) — all values from CSV (multi-select)
-if col_bolt:
-    bolt_options = sorted(df[col_bolt].dropna().unique().tolist())
-    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options)
-else:
-    selected_bolts = []
-    st.warning("BOLT TORQUING NUMBER column not found in CSV.")
+    # BOLT TORQUING NUMBERS (multi-select)
+    bolt_options = sorted(df[col_bolt].dropna().unique().tolist()) if col_bolt else []
+    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options, key="bolts")
 
-# TYPE OF BOLTING
-if col_type:
-    type_options = sorted(df[col_type].dropna().unique().tolist())
-    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options)
-else:
-    type_selected = ""
+    # TYPE OF BOLTING
+    type_options = sorted(df[col_type].dropna().unique().tolist()) if col_type else []
+    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="type")
 
-# DATE
-date_selected = st.date_input("DATE", value=datetime.today().date())
+    # DATE
+    date_selected = st.date_input("DATE", value=datetime.today().date(), key="date")
 
-# SUPERVISOR
-if col_supervisor:
-    sup_options = sorted(df[col_supervisor].dropna().unique().tolist())
-    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options)
-else:
-    supervisor_selected = ""
+    # SUPERVISOR
+    sup_options = sorted(df[col_supervisor].dropna().unique().tolist()) if col_supervisor else []
+    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options, key="supervisor")
 
-# TORQUE, STATUS, REMARKS
-torque_value = st.text_input("TORQUE VALUE", "")
-status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"])
-remarks_value = st.text_area("REMARKS", "")
+    # OTHER FIELDS
+    torque_value = st.text_input("TORQUE VALUE", "", key="torque")
+    status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="status")
+    remarks_value = st.text_area("REMARKS", "", key="remarks")
 
-# ---------- Save New Record ----------
-if st.button("💾 Save Record"):
-    if not selected_bolts:
+    # Submit button
+    submitted = st.form_submit_button("💾 Save Record")
+
+if submitted:
+    if not selected_line:
+        st.warning("Please select a LINE NUMBER.")
+    elif not selected_bolts:
         st.warning("Please select at least one BOLT TORQUING NUMBER.")
     else:
         new_rows = []
@@ -163,16 +162,18 @@ if st.button("💾 Save Record"):
             })
 
         new_df = pd.DataFrame(new_rows)
-
-        # Ensure all columns exist in df
+        # Ensure columns align
         for c in new_df.columns:
             if c not in df.columns:
                 df[c] = ""
-
         df2 = pd.concat([df, new_df], ignore_index=True)
         save_data(df2)
 
+        st.session_state.form_submitted = True
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
+
+        # Force form reset
+        st.rerun()
 
 st.markdown("---")
 st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
