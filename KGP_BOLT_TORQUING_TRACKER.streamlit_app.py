@@ -83,14 +83,14 @@ st.subheader("Bolt Torquing Entry Form")
 
 # LINE NUMBER Dropdown
 line_options = sorted([v for v in df[col_line].unique() if v.strip()], key=natural_sort_key) if col_line else []
-line_choice = st.selectbox("LINE NUMBER", line_options, key="selected_line")
+line_choice = st.selectbox("LINE NUMBER", ["Choose option"] + line_options, key="selected_line")
 
 # Filter TEST PACK options based on selected line
 testpack_options = []
-if line_choice and col_line and col_testpack:
+if line_choice != "Choose option" and col_line and col_testpack:
     df_line = df[df[col_line] == line_choice]
     testpack_options = sorted([v for v in df_line[col_testpack].unique() if v.strip()], key=natural_sort_key)
-selected_testpack = st.selectbox("TEST PACK NO", testpack_options, key="selected_testpack")
+selected_testpack = st.selectbox("TEST PACK NO", ["Choose option"] + testpack_options, key="selected_testpack")
 
 # ---------- Form ----------
 with st.form("entry_form", clear_on_submit=True):
@@ -103,14 +103,14 @@ with st.form("entry_form", clear_on_submit=True):
     )
 
     type_options = sorted([v for v in df[col_type].dropna().unique() if v.strip()], key=str) if col_type else []
-    type_choice = st.selectbox("TYPE OF BOLTING", type_options, key="form_type")
+    type_choice = st.selectbox("TYPE OF BOLTING", ["Choose option"] + type_options, key="form_type")
 
     date_choice = st.date_input("DATE", datetime.today().date(), key="form_date")
 
     supervisor_options = sorted([v for v in df[col_supervisor].dropna().unique() if v.strip()], key=str) if col_supervisor else []
-    supervisor_choice = st.selectbox("SUPERVISOR", supervisor_options, key="form_supervisor")
+    supervisor_choice = st.selectbox("SUPERVISOR", ["Choose option"] + supervisor_options, key="form_supervisor")
 
-    status_choice = st.selectbox("STATUS", ["OK", "NOT OK", "PENDING"], key="form_status")
+    status_choice = st.selectbox("STATUS", ["Choose option", "OK", "NOT OK", "PENDING"], key="form_status")
     remarks_choice = st.text_area("REMARKS", "", key="form_remarks")
 
     save = st.form_submit_button("💾 Save Record")
@@ -118,12 +118,18 @@ with st.form("entry_form", clear_on_submit=True):
 # ---------- Save Data ----------
 if save:
     errors = []
-    if not line_choice:
+    if not line_choice or line_choice == "Choose option":
         errors.append("Please select LINE NUMBER.")
+    if not selected_testpack or selected_testpack == "Choose option":
+        errors.append("Please select TEST PACK NO.")
     if not selected_bolts:
         errors.append("Please select at least one BOLT TORQUING NUMBER.")
-    if not selected_testpack:
-        errors.append("Please select TEST PACK NO.")
+    if not type_choice or type_choice == "Choose option":
+        errors.append("Please select TYPE OF BOLTING.")
+    if not supervisor_choice or supervisor_choice == "Choose option":
+        errors.append("Please select SUPERVISOR.")
+    if not status_choice or status_choice == "Choose option":
+        errors.append("Please select STATUS.")
 
     if errors:
         for e in errors:
