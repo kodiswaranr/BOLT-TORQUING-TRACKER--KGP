@@ -148,17 +148,22 @@ if save:
         save_data(df_final)
         st.session_state.new_records = new_df
 
-        # ✅ Reset all form fields after saving
-        st.session_state.selected_line = None
-        st.session_state.selected_testpack = None
-        st.session_state.form_bolts = []
-        st.session_state.form_type = ""
-        st.session_state.form_date = datetime.today().date()
-        st.session_state.form_supervisor = ""
-        st.session_state.form_status = "OK"
-        st.session_state.form_remarks = ""
-
         st.success(f"✅ {len(new_df)} record(s) saved successfully.")
+
+        # ✅ Clear all fields after save
+        for key in [
+            "selected_line",
+            "selected_testpack",
+            "form_bolts",
+            "form_type",
+            "form_date",
+            "form_supervisor",
+            "form_status",
+            "form_remarks",
+        ]:
+            if key in st.session_state:
+                del st.session_state[key]
+
         st.rerun()
 
 # ---------- Recently Added ----------
