@@ -83,17 +83,20 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK NUMBER lookup based on LINE NUMBER
+    # TEST PACK NUMBER lookup based on LINE NUMBER (auto-select if only one)
     testpack_options = []
+    selected_testpack = ""
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
         testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
 
-    if testpack_options:
-        selected_testpack = st.selectbox("TEST PACK NUMBER", testpack_options, key="testpack")
-    else:
-        selected_testpack = st.selectbox("TEST PACK NUMBER", [""], key="testpack_disabled")
-        st.warning("No TEST PACK NUMBER found for this LINE NUMBER.")
+        if len(testpack_options) == 1:
+            selected_testpack = testpack_options[0]
+            st.info(f"Auto-selected TEST PACK NUMBER: {selected_testpack}")
+        elif len(testpack_options) > 1:
+            selected_testpack = st.selectbox("TEST PACK NUMBER", testpack_options, key="testpack")
+        else:
+            st.warning("No TEST PACK NUMBER found for this LINE NUMBER.")
 
     # BOLT TORQUING NUMBERS (multi-select, sorted ascending J1 → J200)
     bolt_options = []
