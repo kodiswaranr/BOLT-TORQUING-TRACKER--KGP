@@ -72,9 +72,9 @@ col_remarks = find_col(["REMARKS"])
 
 # ---------- Session State ----------
 if "selected_line" not in st.session_state:
-    st.session_state.selected_line = ""
+    st.session_state.selected_line = None
 if "selected_testpack" not in st.session_state:
-    st.session_state.selected_testpack = ""
+    st.session_state.selected_testpack = None
 if "new_records" not in st.session_state:
     st.session_state.new_records = pd.DataFrame()
 
@@ -112,6 +112,7 @@ with st.form("entry_form", clear_on_submit=True):
 
     status_choice = st.selectbox("STATUS", ["OK", "NOT OK", "PENDING"], key="form_status")
     remarks_choice = st.text_area("REMARKS", "", key="form_remarks")
+
     save = st.form_submit_button("💾 Save Record")
 
 # ---------- Save Data ----------
@@ -141,10 +142,22 @@ if save:
                 col_remarks: remarks_choice
             }
             new_rows.append(r)
+
         new_df = pd.DataFrame(new_rows)
         df_final = pd.concat([df, new_df], ignore_index=True)
         save_data(df_final)
         st.session_state.new_records = new_df
+
+        # ✅ Reset all form fields after saving
+        st.session_state.selected_line = None
+        st.session_state.selected_testpack = None
+        st.session_state.form_bolts = []
+        st.session_state.form_type = ""
+        st.session_state.form_date = datetime.today().date()
+        st.session_state.form_supervisor = ""
+        st.session_state.form_status = "OK"
+        st.session_state.form_remarks = ""
+
         st.success(f"✅ {len(new_df)} record(s) saved successfully.")
         st.rerun()
 
@@ -155,6 +168,7 @@ if not st.session_state.new_records.empty:
 
 # ---------- Full History ----------
 with st.expander("📋 All Records (Full History)", expanded=False):
+    # Hide download button
     st.markdown("<style>button[data-testid='stBaseButton-download']{display:none;}</style>", unsafe_allow_html=True)
     df_all = read_data()
     if col_date in df_all.columns:
