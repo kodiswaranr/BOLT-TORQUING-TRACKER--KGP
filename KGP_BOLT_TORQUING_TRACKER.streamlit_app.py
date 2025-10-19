@@ -64,7 +64,6 @@ def find_col(possible):
 
 col_line = find_col(["LINE NO", "LINE NUMBER", "LINE"])
 col_testpack = find_col(["TEST PACK NO", "TEST PACK NUMBER", "PACK NO"])
-col_bolt = find_col(["BOLT TORQUING NUMBER", "BOLT TORQUING NUMBERS", "BOLT NO"])
 col_type = find_col(["TYPE OF BOLTING", "BOLTING TYPE"])
 col_date = find_col(["DATE"])
 col_supervisor = find_col(["SUPERVISOR"])
@@ -86,22 +85,22 @@ st.subheader("Bolt Torquing Entry Form")
 line_options = sorted([v for v in df[col_line].unique() if v], key=natural_sort_key) if col_line else []
 line_choice = st.selectbox("LINE NUMBER", [""] + line_options, key="selected_line")
 
-# Filter TEST PACK and BOLT lists based on selected line
-testpack_options, bolt_options = [], []
+# Filter TEST PACK options based on selected line
+testpack_options = []
 if line_choice and col_line and col_testpack:
     df_line = df[df[col_line] == line_choice]
     testpack_options = sorted(df_line[col_testpack].unique(), key=natural_sort_key)
-    bolt_options = sorted(df_line[col_bolt].unique(), key=natural_sort_key) if col_bolt else []
-else:
-    bolt_options = sorted(df[col_bolt].unique(), key=natural_sort_key) if col_bolt else []
-
-# TEST PACK NO dropdown
 selected_testpack = st.selectbox("TEST PACK NO", [""] + testpack_options, key="selected_testpack")
 
 # ---------- Form ----------
 with st.form("entry_form", clear_on_submit=True):
-    # ✅ BOLT TORQUING NUMBER(S) dropdown - now natural sorted
-    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", sorted(bolt_options, key=natural_sort_key), key="form_bolts")
+    # ✅ BOLT TORQUING NUMBER(S): Always show J1–J200 in natural order
+    bolt_options = [f"J{i}" for i in range(1, 201)]
+    selected_bolts = st.multiselect(
+        "BOLT TORQUING NUMBER(S)",
+        sorted(bolt_options, key=natural_sort_key),
+        key="form_bolts"
+    )
 
     type_options = sorted(df[col_type].dropna().unique(), key=str) if col_type else []
     type_choice = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="form_type")
@@ -134,7 +133,7 @@ if save:
             r = {
                 col_line: line_choice,
                 col_testpack: selected_testpack,
-                col_bolt: bolt,
+                "BOLT TORQUING NUMBER(S)": bolt,
                 col_type: type_choice,
                 col_date: date_choice.strftime("%Y-%m-%d"),
                 col_supervisor: supervisor_choice,
