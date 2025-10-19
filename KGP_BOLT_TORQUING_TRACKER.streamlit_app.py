@@ -175,15 +175,27 @@ if submitted:
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
         st.rerun()
 
-# ---------- Show All Records (Collapsible View) ----------
+# ---------- Show All Records (Full History, Newest on Top) ----------
 with st.expander("📋 All Records (Full History)", expanded=False):
-    st.dataframe(read_data(), use_container_width=True)
+    df_all = read_data()
+    if col_date in df_all.columns:
+        df_all[col_date] = pd.to_datetime(df_all[col_date], errors="coerce")
+        df_all = df_all.sort_values(by=col_date, ascending=False)
+    else:
+        df_all = df_all.iloc[::-1]
+    st.dataframe(df_all, use_container_width=True)
 
 # ---------- Secure Export ----------
 with st.expander("🔒 Secure Data Export"):
     entered_password = st.text_input("Enter export password", type="password")
     if entered_password == EXPORT_PASSWORD:
-        zip_buffer = create_password_protected_zip(read_data(), "KGP_BOLT_TRACKING_EXPORT", EXPORT_PASSWORD)
+        df_export = read_data()
+        if col_date in df_export.columns:
+            df_export[col_date] = pd.to_datetime(df_export[col_date], errors="coerce")
+            df_export = df_export.sort_values(by=col_date, ascending=False)
+        else:
+            df_export = df_export.iloc[::-1]
+        zip_buffer = create_password_protected_zip(df_export, "KGP_BOLT_TRACKING_EXPORT", EXPORT_PASSWORD)
         st.download_button(
             label="📦 Download Encrypted Data (ZIP)",
             data=zip_buffer,
