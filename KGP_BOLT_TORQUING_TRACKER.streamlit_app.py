@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 import os
 import base64
-import io
-import zipfile
 from datetime import datetime
 
 # ---------- Config ----------
@@ -87,20 +85,7 @@ with st.sidebar:
     if admin_pass:
         if admin_pass == ADMIN_PASSWORD:
             st.success("Access granted ✅")
-
-            # Create password-protected ZIP export
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                zf.writestr(CSV_FILE, df.to_csv(index=False))
-                zf.setpassword(bytes(ADMIN_PASSWORD, "utf-8"))
-            zip_buffer.seek(0)
-
-            st.download_button(
-                "📥 Download CSV (Password Protected ZIP)",
-                data=zip_buffer,
-                file_name="BOLT_TORQUING_TRACKING_PROTECTED.zip",
-                mime="application/zip",
-            )
+            st.info("Admin privileges active (no download option).")
         else:
             st.error("Incorrect password ❌")
 
