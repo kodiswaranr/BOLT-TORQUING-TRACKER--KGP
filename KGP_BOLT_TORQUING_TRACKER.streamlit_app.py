@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # main data file
+CSV_FILE = "BOLT TORQING TRACKING.csv"  # File stored in the same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
@@ -30,6 +30,7 @@ def read_data():
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
+# Natural sorting for J1, J2, ..., J200
 def natural_sort_key(s):
     parts = re.split(r'(\d+)', str(s))
     return [int(p) if p.isdigit() else p.lower() for p in parts]
@@ -82,10 +83,11 @@ if "new_records" not in st.session_state:
 # ---------- UI ----------
 st.subheader("Bolt Torquing Entry Form")
 
+# LINE NUMBER Dropdown
 line_options = sorted([v for v in df[col_line].unique() if v], key=natural_sort_key) if col_line else []
 line_choice = st.selectbox("LINE NUMBER", [""] + line_options, key="selected_line")
 
-# Filter options based on line
+# Filter based on selected line
 testpack_options, bolt_options = [], []
 if line_choice and col_line and col_testpack:
     df_line = df[df[col_line] == line_choice]
@@ -94,18 +96,8 @@ if line_choice and col_line and col_testpack:
 else:
     bolt_options = sorted(df[col_bolt].unique(), key=natural_sort_key) if col_bolt else []
 
-# TEST PACK dropdown
-if len(testpack_options) == 1:
-    st.session_state.selected_testpack = testpack_options[0]
-elif st.session_state.selected_testpack not in testpack_options:
-    st.session_state.selected_testpack = ""
-
-selected_testpack = st.selectbox(
-    "TEST PACK NO", [""] + testpack_options,
-    index=([""] + testpack_options).index(st.session_state.selected_testpack)
-    if st.session_state.selected_testpack in testpack_options else 0,
-    key="selected_testpack"
-)
+# TEST PACK NO (auto filter from selected LINE)
+selected_testpack = st.selectbox("TEST PACK NO", [""] + testpack_options, key="selected_testpack")
 
 # ---------- Form ----------
 with st.form("entry_form", clear_on_submit=True):
@@ -123,11 +115,11 @@ with st.form("entry_form", clear_on_submit=True):
 if save:
     errors = []
     if not line_choice:
-        errors.append("Select LINE NUMBER.")
+        errors.append("Please select LINE NUMBER.")
     if not selected_bolts:
-        errors.append("Select at least one BOLT TORQUING NUMBER.")
-    if col_testpack and not selected_testpack:
-        errors.append("Select TEST PACK NO.")
+        errors.append("Please select at least one BOLT TORQUING NUMBER.")
+    if not selected_testpack:
+        errors.append("Please select TEST PACK NO.")
     if errors:
         for e in errors:
             st.warning(e)
@@ -150,7 +142,7 @@ if save:
         save_data(df_final)
         st.session_state.new_records = new_df
         st.success(f"✅ {len(new_df)} record(s) saved successfully.")
-        st.rerun()  # ✅ Fixed: replaces deprecated experimental_rerun()
+        st.rerun()
 
 # ---------- Recently Added ----------
 if not st.session_state.new_records.empty:
