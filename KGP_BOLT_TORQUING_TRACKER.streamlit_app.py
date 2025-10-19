@@ -5,7 +5,7 @@ import base64
 from datetime import datetime
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must be in same folder
+CSV_FILE = "BOLT TORQING TRACKING.csv"  # Must exist in the same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
@@ -79,18 +79,19 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK NUMBER (dropdown depending on LINE NUMBER)
+    # TEST PACK NUMBER lookup based on LINE NUMBER
     testpack_value = ""
     testpack_options = []
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
         testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
     if testpack_options:
-        testpack_value = st.selectbox("TEST PACK NUMBER", testpack_options, key="testpack")
+        testpack_value = st.selectbox("TEST PACK NUMBER", [""] + testpack_options, key="testpack")
     else:
+        testpack_value = st.selectbox("TEST PACK NUMBER", [""], key="testpack_disabled")
         st.warning("No TEST PACK NUMBER found for this LINE.")
 
-    # BOLT TORQUING NUMBERS (multi-select, sorted ascending like J1→J200)
+    # BOLT TORQUING NUMBERS (multi-select, sorted ascending J1→J200)
     bolt_options = []
     if col_bolt:
         bolt_options = df[col_bolt].dropna().unique().tolist()
@@ -148,12 +149,10 @@ if submitted:
 
         st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
-
         st.rerun()
 
-# ---------- Show All Records (Full History, Newest on Top) ----------
+# ---------- Show All Records (Full History) ----------
 with st.expander("📋 All Records (Full History)", expanded=False):
-    # Hide the "Download CSV" button inside dataframe UI
     hide_download_css = """
         <style>
         button[data-testid="stBaseButton-download"] {
