@@ -9,10 +9,10 @@ import zipfile
 import re
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # Main CSV file
+CSV_FILE = "BOLT TORQING TRACKING.csv"
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
-EXPORT_PASSWORD = "KGP2025"  # Hidden password for export
+EXPORT_PASSWORD = "KGP2025"  # hidden password for export
 
 # ---------- Helper Functions ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
@@ -28,7 +28,7 @@ def read_data():
     if not os.path.exists(CSV_FILE):
         cols = [
             "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-            "TYPE OF BOLTING", "DATE", "SUPERVISOR", "TORQUE VALUE",
+            "TYPE OF BOLTING", "DATE", "SUPERVISOR",
             "STATUS", "REMARKS"
         ]
         pd.DataFrame(columns=cols).to_csv(CSV_FILE, index=False)
@@ -95,7 +95,6 @@ col_bolt = find_col(["BOLT TORQUING NUMBER", "BOLT NUMBER", "BOLT NO"])
 col_type = find_col(["TYPE OF BOLTING", "BOLTING TYPE"])
 col_date = find_col(["DATE"])
 col_supervisor = find_col(["SUPERVISOR"])
-col_torque = find_col(["TORQUE VALUE", "TORQUE"])
 col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
@@ -126,7 +125,6 @@ with st.form("bolt_form", clear_on_submit=True):
         bolt_options = sorted(bolt_options, key=natural_sort_key)
     else:
         bolt_options = []
-
     selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options)
 
     # TYPE OF BOLTING
@@ -140,11 +138,13 @@ with st.form("bolt_form", clear_on_submit=True):
     sup_options = sorted(df[col_supervisor].dropna().unique().tolist()) if col_supervisor else []
     supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options)
 
-    # OTHER FIELDS
-    torque_value = st.text_input("TORQUE VALUE", "")
+    # STATUS
     status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"])
+
+    # REMARKS
     remarks_value = st.text_area("REMARKS", "")
 
+    # Submit
     submitted = st.form_submit_button("💾 Save Record")
 
 # ---------- Handle Submission ----------
@@ -163,7 +163,6 @@ if submitted:
                 col_type or "TYPE OF BOLTING": type_selected,
                 col_date or "DATE": date_selected.strftime("%Y-%m-%d"),
                 col_supervisor or "SUPERVISOR": supervisor_selected,
-                col_torque or "TORQUE VALUE": torque_value,
                 col_status or "STATUS": status_value,
                 col_remarks or "REMARKS": remarks_value
             })
