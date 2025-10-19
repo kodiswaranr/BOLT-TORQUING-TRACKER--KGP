@@ -3,14 +3,10 @@ import streamlit as st
 import pandas as pd
 import os
 import base64
-import io
-import zipfile
 from datetime import datetime
-from pathlib import Path
 
 # ---------- Config ----------
 CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must be in same folder
-BACKUP_DIR = "backup"
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
@@ -35,13 +31,7 @@ def read_data():
     return df
 
 def save_data(df: pd.DataFrame):
-    """Save to main file and create timestamped backup."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    backup_path = Path(BACKUP_DIR) / f"BOLT_TORQING_TRACKING_{timestamp}.csv"
     df.to_csv(CSV_FILE, index=False)
-    df.to_csv(backup_path, index=False)
-    return str(backup_path)
 
 # ---------- Page Setup ----------
 st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
@@ -92,24 +82,12 @@ with st.sidebar:
     st.markdown("---")
     st.write("🔐 Admin Access")
     admin_pass = st.text_input("Enter admin password", type="password")
-
     if admin_pass:
         if admin_pass == ADMIN_PASSWORD:
             st.success("Access granted ✅")
-
-            # Generate password-protected ZIP
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                zf.setpassword(bytes(ADMIN_PASSWORD, "utf-8"))
-                zf.writestr(CSV_FILE, df.to_csv(index=False))
-            zip_buffer.seek(0)
-
-            st.download_button(
-                "📥 Download Protected CSV (ZIP)",
-                data=zip_buffer,
-                file_name="BOLT_TORQING_TRACKING_PROTECTED.zip",
-                mime="application/zip",
-            )
+            if os.path.exists(CSV_FILE):
+                with open(CSV_FILE, "rb") as f:
+                    st.download_button("📥 Download CSV", f, file_name=CSV_FILE)
         else:
             st.error("Incorrect password ❌")
 
@@ -125,7 +103,7 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK (auto)
+    # TEST PACK (auto-detect)
     testpack_value = ""
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
@@ -135,7 +113,7 @@ with st.form("bolt_form", clear_on_submit=True):
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
     # BOLT TORQUING NUMBERS (multi-select)
-    bolt_options = sorted(df_line[col_bolt].dropna().unique().tolist()) if col_bolt and selected_line else []
+    bolt_options = sorted(df[col_bolt].dropna().unique().tolist()) if col_bolt else []
     selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options, key="bolts")
 
     # TYPE OF BOLTING
@@ -178,13 +156,15 @@ if submitted:
             })
 
         new_df = pd.DataFrame(new_rows)
+        # Add new rows
         df2 = pd.concat([df, new_df], ignore_index=True)
-        backup_path = save_data(df2)
+        save_data(df2)
 
+        # Show newly added records
         st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
-        st.info(f"📦 Backup created: {backup_path}")
 
+        # Force refresh to clear form
         st.rerun()
 
 # ---------- Display Newly Added Records ----------
