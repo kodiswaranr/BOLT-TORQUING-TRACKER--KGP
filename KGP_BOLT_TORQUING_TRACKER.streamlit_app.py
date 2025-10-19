@@ -5,13 +5,12 @@ import base64
 from datetime import datetime
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # Must exist in the same folder
+CSV_FILE = "BOLT TORQING TRACKING.csv"
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
-    """Load and encode logo as base64 HTML."""
     if os.path.exists(path):
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -19,7 +18,6 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
     return ""
 
 def read_data():
-    """Read CSV file and clean headers/values."""
     if not os.path.exists(CSV_FILE):
         st.error(f"CSV file '{CSV_FILE}' not found. Please place it in this folder.")
         st.stop()
@@ -29,7 +27,6 @@ def read_data():
     return df
 
 def save_data(df: pd.DataFrame):
-    """Save dataframe to CSV."""
     df.to_csv(CSV_FILE, index=False)
 
 # ---------- Page Setup ----------
@@ -54,16 +51,15 @@ st.markdown(
 # ---------- Load Data ----------
 df = read_data()
 
-# ---------- Column Detection ----------
+# ---------- Detect Columns ----------
 def find_col(possible_names):
-    """Find matching column name from known possibilities."""
     for name in possible_names:
         if name in df.columns:
             return name
     return None
 
 col_line = find_col(["LINE NO", "LINE NUMBER", "LINE"])
-col_testpack = find_col(["TEST PACK NUMBER", "TEST PACK NO", "PACK NO"])
+col_testpack = find_col(["TEST PACK NO", "TEST PACK NUMBER", "PACK NO"])
 col_bolt = find_col(["BOLT TORQUING NUMBER", "BOLT NUMBER", "BOLT NO"])
 col_type = find_col(["TYPE OF BOLTING", "BOLTING TYPE"])
 col_date = find_col(["DATE"])
@@ -71,7 +67,7 @@ col_supervisor = find_col(["SUPERVISOR"])
 col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
-# ---------- Session State ----------
+# ---------- Initialize Session ----------
 if "new_records" not in st.session_state:
     st.session_state.new_records = pd.DataFrame()
 
@@ -83,71 +79,61 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK NUMBER lookup based on LINE NUMBER (auto-select if only one)
+    # TEST PACK NO filtered by LINE NUMBER
+    testpack_value = ""
     testpack_options = []
-    selected_testpack = ""
-    if col_testpack and selected_line:
+    if selected_line and col_testpack and col_line in df.columns:
         df_line = df[df[col_line] == selected_line]
         testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
+    selected_testpack = st.selectbox(
+        "TEST PACK NO",
+        [""] + testpack_options,
+        index=0 if not testpack_options else 1 if len(testpack_options) == 1 else 0,
+        key="testpack"
+    )
 
-        if len(testpack_options) == 1:
-            selected_testpack = testpack_options[0]
-            st.info(f"Auto-selected TEST PACK NUMBER: {selected_testpack}")
-        elif len(testpack_options) > 1:
-            selected_testpack = st.selectbox("TEST PACK NUMBER", testpack_options, key="testpack")
-        else:
-            st.warning("No TEST PACK NUMBER found for this LINE NUMBER.")
-
-    # BOLT TORQUING NUMBERS (multi-select, sorted ascending J1 → J200)
-    bolt_options = []
-    if col_bolt:
-        bolt_options = df[col_bolt].dropna().unique().tolist()
-        try:
-            bolt_options = sorted(
-                bolt_options,
-                key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else x
-            )
-        except Exception:
-            bolt_options = sorted(bolt_options)
+    # BOLT TORQUING NUMBER(S) (sorted ascending J1 → J200)
+    bolt_options = sorted(
+        df[col_bolt].dropna().unique().tolist(),
+        key=lambda x: int(''.join(filter(str.isdigit, x))) if any(ch.isdigit() for ch in x) else 0
+    )
     selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options, key="bolts")
 
     # TYPE OF BOLTING
     type_options = sorted(df[col_type].dropna().unique().tolist()) if col_type else []
-    selected_type = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="type")
+    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="type")
 
     # DATE
-    selected_date = st.date_input("DATE", value=datetime.today().date(), key="date")
+    date_selected = st.date_input("DATE", value=datetime.today().date(), key="date")
 
     # SUPERVISOR
-    supervisor_options = sorted(df[col_supervisor].dropna().unique().tolist()) if col_supervisor else []
-    selected_supervisor = st.selectbox("SUPERVISOR", [""] + supervisor_options, key="supervisor")
+    sup_options = sorted(df[col_supervisor].dropna().unique().tolist()) if col_supervisor else []
+    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options, key="supervisor")
 
     # STATUS & REMARKS
-    selected_status = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="status")
+    status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="status")
     remarks_value = st.text_area("REMARKS", "", key="remarks")
 
-    # Submit
+    # Submit button
     submitted = st.form_submit_button("💾 Save Record")
 
-# ---------- Save Data ----------
+# ---------- Save Logic ----------
 if submitted:
     if not selected_line:
         st.warning("Please select a LINE NUMBER.")
     elif not selected_bolts:
         st.warning("Please select at least one BOLT TORQUING NUMBER.")
-    elif not selected_testpack:
-        st.warning("Please select a TEST PACK NUMBER.")
     else:
         new_rows = []
         for bolt in selected_bolts:
             new_rows.append({
-                col_line or "LINE NUMBER": selected_line,
-                col_testpack or "TEST PACK NUMBER": selected_testpack,
+                col_line or "LINE NO": selected_line,
+                col_testpack or "TEST PACK NO": selected_testpack,
                 col_bolt or "BOLT TORQUING NUMBER": bolt,
-                col_type or "TYPE OF BOLTING": selected_type,
-                col_date or "DATE": selected_date.strftime("%Y-%m-%d"),
-                col_supervisor or "SUPERVISOR": selected_supervisor,
-                col_status or "STATUS": selected_status,
+                col_type or "TYPE OF BOLTING": type_selected,
+                col_date or "DATE": date_selected.strftime("%Y-%m-%d"),
+                col_supervisor or "SUPERVISOR": supervisor_selected,
+                col_status or "STATUS": status_value,
                 col_remarks or "REMARKS": remarks_value
             })
 
@@ -159,23 +145,15 @@ if submitted:
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
         st.rerun()
 
-# ---------- Show All Records (Full History) ----------
+# ---------- Show Records ----------
 with st.expander("📋 All Records (Full History)", expanded=False):
-    hide_download_css = """
-        <style>
-        button[data-testid="stBaseButton-download"] {display: none;}
-        </style>
-    """
-    st.markdown(hide_download_css, unsafe_allow_html=True)
+    if os.path.exists(CSV_FILE):
+        df_all = pd.read_csv(CSV_FILE)
+        if "DATE" in df_all.columns:
+            df_all["DATE"] = pd.to_datetime(df_all["DATE"], errors="coerce")
+            df_all = df_all.sort_values(by="DATE", ascending=False)
+        st.dataframe(df_all, use_container_width=True)
 
-    df_all = read_data()
-    if col_date in df_all.columns:
-        df_all[col_date] = pd.to_datetime(df_all[col_date], errors="coerce")
-        df_all = df_all.sort_values(by=col_date, ascending=False)
-    else:
-        df_all = df_all.iloc[::-1]
-
-    st.dataframe(df_all, use_container_width=True)
-
+# ---------- Footer ----------
 st.markdown("---")
-st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
+st.caption("© 2025 KGP BOLT TORQUING TRACKER — All rights reserved.")
