@@ -116,10 +116,10 @@ with st.form("bolt_form", clear_on_submit=True):
             testpack_value = testpacks[0]
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
-    # BOLT TORQUING NUMBERS — shown in natural descending order (J200 → J1)
+    # BOLT TORQUING NUMBERS — shown in natural ASCENDING order (J1 → J200)
     if col_bolt:
         bolt_options = df[col_bolt].dropna().unique().tolist()
-        bolt_options = sorted(bolt_options, key=natural_sort_key, reverse=True)
+        bolt_options = sorted(bolt_options, key=natural_sort_key)  # ascending order
     else:
         bolt_options = []
 
