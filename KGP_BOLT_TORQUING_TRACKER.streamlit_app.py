@@ -22,6 +22,7 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
     return ""
 
 def read_data():
+    """Reads and cleans CSV data, fixing column names and trimming values."""
     if os.path.exists(CSV_FILE):
         try:
             df = pd.read_csv(CSV_FILE)
@@ -33,6 +34,15 @@ def read_data():
             "TYPE OF BOLTING", "DATE", "SUPERVISOR",
             "TORQUE VALUE", "STATUS", "REMARKS"
         ])
+
+    # --- Normalize column names ---
+    df.columns = df.columns.str.strip().str.upper()
+
+    # --- Trim string values ---
+    for col in df.columns:
+        if df[col].dtype == "object":
+            df[col] = df[col].astype(str).str.strip()
+
     return df
 
 def save_data(df: pd.DataFrame):
@@ -144,19 +154,18 @@ if is_admin:
     </div>
     """, unsafe_allow_html=True)
 
-# ---------- Main selection ----------
+# ---------- Main Selection ----------
 st.subheader("Select Line and Bolt Torquing Number(s)")
 
 # Step 1 — LINE NUMBER dropdown
-line_options = df["LINE NUMBER"].dropna().astype(str).unique().tolist()
-line_options.sort()
+line_options = sorted(df["LINE NUMBER"].dropna().unique().tolist())
 selected_line = st.selectbox("LINE NUMBER", [""] + line_options)
 
 if not selected_line:
     st.info("Please select a LINE NUMBER to view related data.")
 else:
     # Filter by selected line
-    line_data = df[df["LINE NUMBER"].astype(str) == selected_line]
+    line_data = df[df["LINE NUMBER"].astype(str) == str(selected_line)]
 
     # Step 2 — Auto-fill TEST PACK, TYPE OF BOLTING, SUPERVISOR
     auto_test_pack = line_data["TEST PACK NUMBER"].dropna().astype(str).iloc[-1] if not line_data.empty else ""
@@ -174,67 +183,3 @@ else:
         test_pack_input, type_of_bolting_input, supervisor_input = auto_test_pack, auto_bolting_type, auto_supervisor
 
     # Step 3 — BOLT TORQUING NUMBER dropdown
-    bolts_for_line = (
-        line_data["BOLT TORQUING NUMBER"]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
-    bolts_for_line.sort()
-    selected_bolts = st.multiselect("BOLT TORQUING NUMBER (multiple allowed)", bolts_for_line)
-
-    # Step 4 — Date input
-    date_input = st.date_input("Date", value=datetime.today().date())
-
-    # ---------- Display and Edit ----------
-    if not selected_bolts:
-        st.info("Choose one or more Bolt Torquing Numbers to view or edit records.")
-    else:
-        mask = (
-            (df["LINE NUMBER"].astype(str) == selected_line)
-            & (df["BOLT TORQUING NUMBER"].astype(str).isin(selected_bolts))
-        )
-        selected_rows = df.loc[mask].copy()
-        if selected_rows.empty:
-            st.warning("No rows found for selected bolt(s).")
-        else:
-            display_cols = [
-                "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-                "TYPE OF BOLTING", "DATE", "SUPERVISOR",
-                "TORQUE VALUE", "STATUS", "REMARKS"
-            ]
-            st.markdown("### Matching Records")
-            st.dataframe(selected_rows[display_cols].reset_index(drop=True), use_container_width=True)
-
-            if len(selected_bolts) == 1:
-                st.markdown("### Edit Selected Bolt Record")
-                row_idx = selected_rows.index[0]
-                row = selected_rows.iloc[0].copy()
-
-                torque_value = st.text_input("Torque Value", value=str(row.get("TORQUE VALUE", "")))
-                status = st.selectbox("Status", ["", "OK", "NOT OK", "PENDING"],
-                                      index=0 if not row.get("STATUS") else
-                                      (["", "OK", "NOT OK", "PENDING"].index(row.get("STATUS"))
-                                       if row.get("STATUS") in ["OK","NOT OK","PENDING"] else 0))
-                remarks = st.text_area("Remarks", value=str(row.get("REMARKS", "")))
-
-                if st.button("Save Changes"):
-                    df.at[row_idx, "DATE"] = date_input.strftime("%Y-%m-%d")
-                    df.at[row_idx, "SUPERVISOR"] = supervisor_input
-                    df.at[row_idx, "TYPE OF BOLTING"] = type_of_bolting_input
-                    df.at[row_idx, "TEST PACK NUMBER"] = test_pack_input
-                    df.at[row_idx, "TORQUE VALUE"] = torque_value
-                    df.at[row_idx, "STATUS"] = status
-                    df.at[row_idx, "REMARKS"] = remarks
-                    try:
-                        save_data(df)
-                        st.success("✅ Changes saved successfully.")
-                    except Exception as e:
-                        st.error(f"Failed to save: {e}")
-            else:
-                st.info("Multiple selection: batch editing can be added later.")
-
-# ---------- Footer ----------
-st.markdown("---")
-st.caption("KGP BOLT TORQUING TRACKER — View & Edit (Admin Restricted).")
