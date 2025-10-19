@@ -1,185 +1,138 @@
 import streamlit as st
 import pandas as pd
-import os
-import base64
 from datetime import datetime
 
-# ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"
-LEFT_LOGO = "left_logo.png"
-RIGHT_LOGO = "right_logo.png"
+st.set_page_config(page_title="KGP Bolt Torquing Tracker", layout="wide")
 
-DEFAULT_ADMIN_PASSWORD = "Admin@1234"
-ADMIN_PASSWORD = os.environ.get("BOLT_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
+# ---------- Page Header ----------
+st.markdown(
+    "<h1 style='text-align:center; color:#1E3A8A;'>KGP BOLT TORQUING TRACKER</h1>",
+    unsafe_allow_html=True,
+)
+st.markdown("---")
 
-# ---------- Helpers ----------
-def load_logo_as_base64(path: str, width: int = 80) -> str:
-    if os.path.exists(path):
-        with open(path, "rb") as f:
-            b = f.read()
-        b64 = base64.b64encode(b).decode()
-        return f"<img src='data:image/png;base64,{b64}' width='{width}'/>"
-    return ""
+# ---------- Load Data ----------
+@st.cache_data
+def load_data(file_path="BOLT TORQING TRACKING.csv"):
+    df = pd.read_csv(file_path)
 
-def read_data():
-    """Reads and cleans CSV data, fixing column names and trimming values."""
-    if os.path.exists(CSV_FILE):
-        try:
-            df = pd.read_csv(CSV_FILE)
-        except Exception:
-            df = pd.read_csv(CSV_FILE, engine="python")
-    else:
-        df = pd.DataFrame(columns=[
-            "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-            "TYPE OF BOLTING", "DATE", "SUPERVISOR",
-            "TORQUE VALUE", "STATUS", "REMARKS"
-        ])
-
-    # --- Normalize column names ---
+    # Normalize column names (case and spaces)
     df.columns = df.columns.str.strip().str.upper()
 
-    # --- Trim string values ---
-    for col in df.columns:
-        if df[col].dtype == "object":
-            df[col] = df[col].astype(str).str.strip()
+    # Normalize string data (remove leading/trailing spaces)
+    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
 
     return df
 
-def save_data(df: pd.DataFrame):
-    df.to_csv(CSV_FILE, index=False)
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Error loading CSV: {e}")
+    st.stop()
 
-def ensure_cols(df: pd.DataFrame):
-    expected = [
-        "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-        "TYPE OF BOLTING", "DATE", "SUPERVISOR",
-        "TORQUE VALUE", "STATUS", "REMARKS"
-    ]
-    for c in expected:
-        if c not in df.columns:
-            df[c] = ""
-    return df
+# ---------- Admin Login ----------
+st.sidebar.markdown("### 🔒 Admin Login")
+password_input = st.sidebar.text_input("Enter admin password", type="password")
+is_admin = password_input == "admin123"
 
-# ---------- Page setup ----------
-st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
-
-# ---------- Header ----------
-left_logo_html = load_logo_as_base64(LEFT_LOGO, 80)
-right_logo_html = load_logo_as_base64(RIGHT_LOGO, 80)
-
-header_html_template = """
-<style>
-.header-container {{
-  background-color: #f2f6fa;
-  padding: 14px;
-  border-radius: 8px;
-  margin-bottom: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}}
-.header-logo {{ width: 80px; }}
-.header-title {{ font-size: 36px; font-weight:700; margin:0; color:#111; }}
-@media (max-width: 768px) {{
-  .header-container {{ flex-direction: column; align-items:center; }}
-  .header-logo {{ width: 48px; margin-bottom:6px; }}
-  .header-title {{ font-size:22px; }}
-}}
-</style>
-<div class="header-container">
-  <div style="flex:1; text-align:left;">{left}</div>
-  <div style="flex:2; text-align:center;">
-    <h1 class="header-title">KGP BOLT TORQUING TRACKER</h1>
-  </div>
-  <div style="flex:1; text-align:right;">{right}</div>
-</div>
-"""
-st.markdown(
-    header_html_template.format(
-        left=left_logo_html.replace("<img", "<img class='header-logo'"),
-        right=right_logo_html.replace("<img", "<img class='header-logo'")
-    ),
-    unsafe_allow_html=True
-)
-
-# ---------- Load data ----------
-df = read_data()
-df = ensure_cols(df)
-
-# ---------- Sidebar ----------
-with st.sidebar:
-    st.header("Quick Actions")
-    st.write("Records:", len(df))
-    st.write("Unique Bolt Numbers:", df["BOLT TORQUING NUMBER"].nunique())
-
-    st.markdown("---")
-    st.write("🔐 Admin Login")
-    admin_pass = st.text_input("Enter admin password", type="password")
-    is_admin = admin_pass == ADMIN_PASSWORD
-    if is_admin:
-        st.success("✅ Admin mode enabled.")
-        if os.path.exists(CSV_FILE):
-            with open(CSV_FILE, "rb") as f:
-                data_bytes = f.read()
-            st.download_button(
-                label="📥 Download CSV",
-                data=data_bytes,
-                file_name=os.path.basename(CSV_FILE),
-                mime="text/csv"
-            )
-    elif admin_pass:
-        st.error("Incorrect password")
-
-# ---------- Fixed Admin Banner ----------
 if is_admin:
-    st.markdown("""
-    <style>
-    .fixed-banner {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #ffe6e6;
-        border-bottom: 3px solid #e53935;
-        color: #b71c1c;
-        font-weight: 600;
-        text-align: center;
-        padding: 10px;
-        z-index: 9999;
-        font-size: 16px;
-    }
-    body { padding-top: 50px; }
-    </style>
-    <div class="fixed-banner">
-        ⚠️ ADMIN MODE ACTIVE — Editing privileges are enabled. Proceed carefully.
-    </div>
-    """, unsafe_allow_html=True)
-
-# ---------- Main Selection ----------
-st.subheader("Select Line and Bolt Torquing Number(s)")
-
-# Step 1 — LINE NUMBER dropdown
-line_options = sorted(df["LINE NUMBER"].dropna().unique().tolist())
-selected_line = st.selectbox("LINE NUMBER", [""] + line_options)
-
-if not selected_line:
-    st.info("Please select a LINE NUMBER to view related data.")
+    st.sidebar.success("✅ Admin Mode Active")
 else:
-    # Filter by selected line
-    line_data = df[df["LINE NUMBER"].astype(str) == str(selected_line)]
+    st.sidebar.info("Enter password to edit data")
 
-    # Step 2 — Auto-fill TEST PACK, TYPE OF BOLTING, SUPERVISOR
-    auto_test_pack = line_data["TEST PACK NUMBER"].dropna().astype(str).iloc[-1] if not line_data.empty else ""
-    auto_bolting_type = line_data["TYPE OF BOLTING"].dropna().astype(str).iloc[-1] if not line_data.empty else ""
-    auto_supervisor = line_data["SUPERVISOR"].dropna().astype(str).iloc[-1] if not line_data.empty else ""
+# ---------- Quick Stats ----------
+st.sidebar.markdown("### 📊 Quick Actions")
+st.sidebar.write(f"Records: {len(df)}")
+if "BOLT TORQUING NUMBER" in df.columns:
+    st.sidebar.write(f"Unique Bolt Numbers: {df['BOLT TORQUING NUMBER'].nunique()}")
+
+st.markdown("### Select Line and Bolt Torquing Number(s)")
+
+# ---------- Line Number Selection ----------
+if "LINE NUMBER" not in df.columns:
+    st.error("Column 'LINE NUMBER' not found in CSV. Check your header names.")
+    st.stop()
+
+line_numbers = sorted(df["LINE NUMBER"].dropna().unique())
+
+if not line_numbers:
+    st.warning("No valid 'LINE NUMBER' entries found in your CSV.")
+    st.stop()
+
+line_number = st.selectbox("LINE NUMBER", line_numbers)
+
+# ---------- Auto-select Test Number(s) ----------
+filtered_df = df[df["LINE NUMBER"] == line_number]
+
+if "TEST NUMBER" in filtered_df.columns:
+    test_numbers = sorted(filtered_df["TEST NUMBER"].dropna().unique())
+else:
+    test_numbers = []
+
+if test_numbers:
+    selected_tests = st.multiselect("TEST NUMBER(s)", test_numbers)
+else:
+    st.warning("No TEST NUMBERs found for this LINE NUMBER.")
+    selected_tests = []
+
+# ---------- Bolt Torquing Number Selection ----------
+if "BOLT TORQUING NUMBER" in filtered_df.columns:
+    bolt_options = sorted(filtered_df["BOLT TORQUING NUMBER"].dropna().unique())
+    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(s)", bolt_options)
+else:
+    st.warning("No BOLT TORQUING NUMBER column found in CSV.")
+    selected_bolts = []
+
+# ---------- Type of Bolting Selection ----------
+if "TYPE OF BOLTING" in df.columns:
+    bolting_types = sorted(df["TYPE OF BOLTING"].dropna().unique())
+    selected_type = st.selectbox("TYPE OF BOLTING", bolting_types)
+else:
+    selected_type = st.text_input("TYPE OF BOLTING (Manual Entry)")
+
+# ---------- Date and Supervisor Selection ----------
+today = datetime.today().strftime("%Y-%m-%d")
+date_input = st.date_input("DATE", value=pd.to_datetime(today))
+
+if "SUPERVISOR" in df.columns:
+    supervisors = sorted(df["SUPERVISOR"].dropna().unique())
+    selected_supervisor = st.selectbox("SUPERVISOR", supervisors)
+else:
+    selected_supervisor = st.text_input("SUPERVISOR (Manual Entry)")
+
+# ---------- View/Edit Existing Record ----------
+st.markdown("---")
+st.subheader("View / Edit Existing Record")
+
+if selected_bolts:
+    record = df[df["BOLT TORQUING NUMBER"].isin(selected_bolts)]
+    st.dataframe(record)
 
     if is_admin:
-        test_pack_input = st.text_input("TEST PACK NUMBER", value=auto_test_pack)
-        type_of_bolting_input = st.text_input("TYPE OF BOLTING", value=auto_bolting_type)
-        supervisor_input = st.text_input("SUPERVISOR", value=auto_supervisor)
-    else:
-        st.text_input("TEST PACK NUMBER (auto)", value=auto_test_pack, disabled=True)
-        st.text_input("TYPE OF BOLTING (auto)", value=auto_bolting_type, disabled=True)
-        st.text_input("SUPERVISOR (auto)", value=auto_supervisor, disabled=True)
-        test_pack_input, type_of_bolting_input, supervisor_input = auto_test_pack, auto_bolting_type, auto_supervisor
+        st.success("Admin Mode: You can edit and save data.")
 
-    # Step 3 — BOLT TORQUING NUMBER dropdown
+        # Editable fields for each selected record
+        for i, row in record.iterrows():
+            st.markdown(f"#### Edit Record: {row['BOLT TORQUING NUMBER']}")
+            col1, col2, col3 = st.columns(3)
+
+            new_torque = col1.text_input("TORQUE VALUE", row.get("TORQUE VALUE", ""), key=f"torque_{i}")
+            new_status = col2.selectbox(
+                "STATUS", ["OK", "NOT OK"], index=0 if row.get("STATUS") == "OK" else 1, key=f"status_{i}"
+            )
+            new_remark = col3.text_input("REMARK", row.get("REMARK", ""), key=f"remark_{i}")
+
+            # Save button per record
+            if st.button(f"💾 Save Changes to {row['BOLT TORQUING NUMBER']}", key=f"save_{i}"):
+                df.at[i, "TORQUE VALUE"] = new_torque
+                df.at[i, "STATUS"] = new_status
+                df.at[i, "REMARK"] = new_remark
+                df.to_csv("BOLT TORQING TRACKING.csv", index=False)
+                st.success(f"Changes saved for {row['BOLT TORQUING NUMBER']}")
+
+else:
+    st.info("Select at least one BOLT TORQUING NUMBER to view/edit record.")
+
+# ---------- Footer ----------
+st.markdown("---")
+st.caption("KGP BOLT TORQUING TRACKER — View & Edit (Admin Restricted).")
