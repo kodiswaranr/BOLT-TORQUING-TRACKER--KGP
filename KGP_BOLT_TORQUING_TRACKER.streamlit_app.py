@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # File stored in the same folder
+CSV_FILE = "BOLT TORQING TRACKING.csv"
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
@@ -30,10 +30,9 @@ def read_data():
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
-# Natural sorting for J1, J2, ..., J200
+# ✅ Natural sorting helper (ensures J1→J2→J10→J100→J200 order)
 def natural_sort_key(s):
-    parts = re.split(r'(\d+)', str(s))
-    return [int(p) if p.isdigit() else p.lower() for p in parts]
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 # ---------- Page Setup ----------
 st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
@@ -87,7 +86,7 @@ st.subheader("Bolt Torquing Entry Form")
 line_options = sorted([v for v in df[col_line].unique() if v], key=natural_sort_key) if col_line else []
 line_choice = st.selectbox("LINE NUMBER", [""] + line_options, key="selected_line")
 
-# Filter based on selected line
+# Filter TEST PACK and BOLT lists based on selected line
 testpack_options, bolt_options = [], []
 if line_choice and col_line and col_testpack:
     df_line = df[df[col_line] == line_choice]
@@ -96,17 +95,22 @@ if line_choice and col_line and col_testpack:
 else:
     bolt_options = sorted(df[col_bolt].unique(), key=natural_sort_key) if col_bolt else []
 
-# TEST PACK NO (auto filter from selected LINE)
+# TEST PACK NO dropdown
 selected_testpack = st.selectbox("TEST PACK NO", [""] + testpack_options, key="selected_testpack")
 
 # ---------- Form ----------
 with st.form("entry_form", clear_on_submit=True):
-    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options, key="form_bolts")
+    # ✅ BOLT TORQUING NUMBER(S) dropdown - now natural sorted
+    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", sorted(bolt_options, key=natural_sort_key), key="form_bolts")
+
     type_options = sorted(df[col_type].dropna().unique(), key=str) if col_type else []
     type_choice = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="form_type")
+
     date_choice = st.date_input("DATE", datetime.today().date(), key="form_date")
+
     supervisor_options = sorted(df[col_supervisor].dropna().unique(), key=str) if col_supervisor else []
     supervisor_choice = st.selectbox("SUPERVISOR", [""] + supervisor_options, key="form_supervisor")
+
     status_choice = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="form_status")
     remarks_choice = st.text_area("REMARKS", "", key="form_remarks")
     save = st.form_submit_button("💾 Save Record")
@@ -120,6 +124,7 @@ if save:
         errors.append("Please select at least one BOLT TORQUING NUMBER.")
     if not selected_testpack:
         errors.append("Please select TEST PACK NO.")
+
     if errors:
         for e in errors:
             st.warning(e)
