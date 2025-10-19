@@ -145,27 +145,34 @@ remarks_value = st.text_area("REMARKS", "")
 
 # ---------- Save New Record ----------
 if st.button("💾 Save Record"):
-    new_row = {
-        col_line or "LINE NUMBER": selected_line,
-        col_testpack or "TEST PACK NUMBER": testpack_value,
-        col_bolt or "BOLT TORQUING NUMBER": ", ".join(selected_bolts),
-        col_type or "TYPE OF BOLTING": type_selected,
-        col_date or "DATE": date_selected.strftime("%Y-%m-%d"),
-        col_supervisor or "SUPERVISOR": supervisor_selected,
-        col_torque or "TORQUE VALUE": torque_value,
-        col_status or "STATUS": status_value,
-        col_remarks or "REMARKS": remarks_value
-    }
+    if not selected_bolts:
+        st.warning("Please select at least one BOLT TORQUING NUMBER.")
+    else:
+        new_rows = []
+        for bolt in selected_bolts:
+            new_rows.append({
+                col_line or "LINE NUMBER": selected_line,
+                col_testpack or "TEST PACK NUMBER": testpack_value,
+                col_bolt or "BOLT TORQUING NUMBER": bolt,
+                col_type or "TYPE OF BOLTING": type_selected,
+                col_date or "DATE": date_selected.strftime("%Y-%m-%d"),
+                col_supervisor or "SUPERVISOR": supervisor_selected,
+                col_torque or "TORQUE VALUE": torque_value,
+                col_status or "STATUS": status_value,
+                col_remarks or "REMARKS": remarks_value
+            })
 
-    # Ensure all columns exist before saving
-    for c in new_row.keys():
-        if c not in df.columns:
-            df[c] = ""
+        new_df = pd.DataFrame(new_rows)
 
-    new_df = pd.DataFrame([new_row])
-    df2 = pd.concat([df, new_df], ignore_index=True)
-    save_data(df2)
-    st.success("✅ Record saved successfully!")
+        # Ensure all columns exist in df
+        for c in new_df.columns:
+            if c not in df.columns:
+                df[c] = ""
+
+        df2 = pd.concat([df, new_df], ignore_index=True)
+        save_data(df2)
+
+        st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
 
 st.markdown("---")
 st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
