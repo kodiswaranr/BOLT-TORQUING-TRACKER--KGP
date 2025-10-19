@@ -23,7 +23,6 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
 
 def read_data():
     if not os.path.exists(CSV_FILE):
-        # Create empty file with headers if not found
         cols = [
             "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
             "TYPE OF BOLTING", "DATE", "SUPERVISOR", "TORQUE VALUE",
@@ -36,9 +35,7 @@ def read_data():
     return df
 
 def save_data(df: pd.DataFrame):
-    # Save to master CSV
     df.to_csv(CSV_FILE, index=False)
-    # Also save daily backup
     today = datetime.today().strftime("%Y-%m-%d")
     daily_file = f"BOLT TORQING TRACKING_{today}.csv"
     df.to_csv(daily_file, index=False)
@@ -105,7 +102,7 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options)
 
-    # TEST PACK (auto-detect)
+    # TEST PACK
     testpack_value = ""
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
@@ -114,8 +111,17 @@ with st.form("bolt_form", clear_on_submit=True):
             testpack_value = testpacks[0]
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
-    # BOLT TORQUING NUMBERS (multi-select)
-    bolt_options = sorted(df[col_bolt].dropna().unique().tolist()) if col_bolt else []
+    # BOLT TORQUING NUMBERS — shown in descending order
+    if col_bolt:
+        bolt_options = df[col_bolt].dropna().unique().tolist()
+        # Sort descending (numeric if possible, else alphabetic)
+        try:
+            bolt_options = sorted(bolt_options, key=lambda x: float(str(x)), reverse=True)
+        except:
+            bolt_options = sorted(bolt_options, reverse=True)
+    else:
+        bolt_options = []
+
     selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options)
 
     # TYPE OF BOLTING
