@@ -4,15 +4,14 @@ import pandas as pd
 import os
 import base64
 from datetime import datetime
-import io
+from io import BytesIO
 import zipfile
 
 # ---------- Config ----------
-TODAY = datetime.today().strftime("%Y-%m-%d")
-CSV_FILE = f"BOLT_TORQING_TRACKING_{TODAY}.csv"  # Daily file
+CSV_FILE = "BOLT TORQING TRACKING.csv"  # Master file
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
-EXPORT_PASSWORD = "KGP@2025"  # Hidden fixed password for ZIP export
+EXPORT_PASSWORD = "KGP2025"  # 🔒 Hidden password for export ZIP
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
@@ -22,26 +21,38 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
         return f"<img src='data:image/png;base64,{b64}' width='{width}'/>"
     return ""
 
-def read_or_create_today_file():
-    """Read today's CSV file or create a new one if missing."""
-    if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE)
-        df.columns = df.columns.str.strip().str.upper()
-        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-        return df
-    else:
-        columns = [
+def read_data():
+    if not os.path.exists(CSV_FILE):
+        # Create empty file with headers if not found
+        cols = [
             "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-            "TYPE OF BOLTING", "DATE", "SUPERVISOR",
-            "TORQUE VALUE", "STATUS", "REMARKS"
+            "TYPE OF BOLTING", "DATE", "SUPERVISOR", "TORQUE VALUE",
+            "STATUS", "REMARKS"
         ]
-        df = pd.DataFrame(columns=columns)
-        df.to_csv(CSV_FILE, index=False)
-        return df
+        pd.DataFrame(columns=cols).to_csv(CSV_FILE, index=False)
+    df = pd.read_csv(CSV_FILE)
+    df.columns = df.columns.str.strip().str.upper()
+    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+    return df
 
-def save_today(df: pd.DataFrame):
-    """Save current day's file."""
+def save_data(df: pd.DataFrame):
+    # Save to master CSV
     df.to_csv(CSV_FILE, index=False)
+    # Also save daily backup
+    today = datetime.today().strftime("%Y-%m-%d")
+    daily_file = f"BOLT TORQING TRACKING_{today}.csv"
+    df.to_csv(daily_file, index=False)
+
+def create_password_protected_zip(df, filename, password):
+    buffer = BytesIO()
+    temp_csv = f"{filename}.csv"
+    df.to_csv(temp_csv, index=False)
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.setpassword(password.encode())
+        zf.write(temp_csv, arcname=os.path.basename(temp_csv))
+    os.remove(temp_csv)
+    buffer.seek(0)
+    return buffer
 
 # ---------- Page Setup ----------
 st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
@@ -63,9 +74,9 @@ st.markdown(
 )
 
 # ---------- Load Data ----------
-df = read_or_create_today_file()
+df = read_data()
 
-# ---------- Detect Columns ----------
+# ---------- Column Detection ----------
 def find_col(possible_names):
     for name in possible_names:
         if name in df.columns:
@@ -82,13 +93,19 @@ col_torque = find_col(["TORQUE VALUE", "TORQUE"])
 col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
-# ---------- Entry Form ----------
+# ---------- Initialize Session ----------
+if "new_records" not in st.session_state:
+    st.session_state.new_records = pd.DataFrame()
+
+# ---------- Main UI ----------
 st.subheader("Bolt Torquing Entry Form")
 
 with st.form("bolt_form", clear_on_submit=True):
+    # LINE NUMBER
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
-    selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
+    selected_line = st.selectbox("LINE NUMBER", line_options)
 
+    # TEST PACK (auto-detect)
     testpack_value = ""
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
@@ -97,21 +114,27 @@ with st.form("bolt_form", clear_on_submit=True):
             testpack_value = testpacks[0]
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
+    # BOLT TORQUING NUMBERS (multi-select)
     bolt_options = sorted(df[col_bolt].dropna().unique().tolist()) if col_bolt else []
-    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options, key="bolts")
+    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options)
 
+    # TYPE OF BOLTING
     type_options = sorted(df[col_type].dropna().unique().tolist()) if col_type else []
-    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="type")
+    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options)
 
-    date_selected = st.date_input("DATE", value=datetime.today().date(), key="date")
+    # DATE
+    date_selected = st.date_input("DATE", value=datetime.today().date())
 
+    # SUPERVISOR
     sup_options = sorted(df[col_supervisor].dropna().unique().tolist()) if col_supervisor else []
-    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options, key="supervisor")
+    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options)
 
-    torque_value = st.text_input("TORQUE VALUE", "", key="torque")
-    status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="status")
-    remarks_value = st.text_area("REMARKS", "", key="remarks")
+    # OTHER FIELDS
+    torque_value = st.text_input("TORQUE VALUE", "")
+    status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"])
+    remarks_value = st.text_area("REMARKS", "")
 
+    # Submit
     submitted = st.form_submit_button("💾 Save Record")
 
 if submitted:
@@ -135,43 +158,29 @@ if submitted:
             })
 
         new_df = pd.DataFrame(new_rows)
-        df2 = pd.concat([df, new_df], ignore_index=True)
-        save_today(df2)
-        st.session_state["recent_added"] = new_df
+        df_all = pd.concat([df, new_df], ignore_index=True)
+        save_data(df_all)
+        st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
         st.rerun()
 
-# ---------- Recently Added ----------
-if "recent_added" in st.session_state and not st.session_state["recent_added"].empty:
-    st.markdown("### 🆕 Recently Added Records")
-    st.dataframe(st.session_state["recent_added"], use_container_width=True)
+# ---------- Display All Records ----------
+st.markdown("### 📋 All Records (Full History)")
+st.dataframe(read_data(), use_container_width=True)
 
-# ---------- Show Today’s Data ----------
-st.markdown(f"### 📋 All Records for {TODAY}")
-st.dataframe(df, use_container_width=True, height=400)
-
-# ---------- Secure Download (All Days) ----------
-st.markdown("### 🔐 Secure Export of All Daily Records")
-
-csv_files = [f for f in os.listdir(".") if f.startswith("BOLT_TORQING_TRACKING_") and f.endswith(".csv")]
-
-if csv_files:
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.setpassword(bytes(EXPORT_PASSWORD, "utf-8"))
-        for file in csv_files:
-            with open(file, "r", encoding="utf-8") as f:
-                zf.writestr(file, f.read())
-    zip_buffer.seek(0)
-
-    st.download_button(
-        "⬇️ Download All Records (Password Protected ZIP)",
-        data=zip_buffer,
-        file_name="KGP_BOLT_TORQUING_ALL_DAYS.zip",
-        mime="application/zip",
-    )
-else:
-    st.info("No records available for export yet.")
+# ---------- Secure Export ----------
+with st.expander("🔒 Secure Data Export"):
+    entered_password = st.text_input("Enter export password", type="password")
+    if entered_password == EXPORT_PASSWORD:
+        zip_buffer = create_password_protected_zip(read_data(), "KGP_BOLT_TRACKING_EXPORT", EXPORT_PASSWORD)
+        st.download_button(
+            label="📦 Download Encrypted Data (ZIP)",
+            data=zip_buffer,
+            file_name="KGP_BOLT_TRACKING_EXPORT.zip",
+            mime="application/zip"
+        )
+    elif entered_password:
+        st.error("Incorrect password.")
 
 st.markdown("---")
-st.caption("© 2025 KGP BOLT TORQUING TRACKER — Daily Records Auto-Saved, Secure Export Enabled")
+st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
