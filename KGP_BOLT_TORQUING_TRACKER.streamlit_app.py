@@ -30,7 +30,8 @@ def read_data():
     else:
         df = pd.DataFrame(columns=[
             "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-            "TYPE OF BOLTING", "DATE", "SUPERVISOR", "TORQUE VALUE", "STATUS", "REMARKS"
+            "TYPE OF BOLTING", "DATE", "SUPERVISOR",
+            "TORQUE VALUE", "STATUS", "REMARKS"
         ])
     return df
 
@@ -40,7 +41,8 @@ def save_data(df: pd.DataFrame):
 def ensure_cols(df: pd.DataFrame):
     expected = [
         "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-        "TYPE OF BOLTING", "DATE", "SUPERVISOR", "TORQUE VALUE", "STATUS", "REMARKS"
+        "TYPE OF BOLTING", "DATE", "SUPERVISOR",
+        "TORQUE VALUE", "STATUS", "REMARKS"
     ]
     for c in expected:
         if c not in df.columns:
@@ -100,24 +102,47 @@ with st.sidebar:
     st.write("Unique Bolt Numbers:", df["BOLT TORQUING NUMBER"].nunique())
 
     st.markdown("---")
-    st.write("🔐 Admin")
-    admin_pass = st.text_input("Enter admin password to download CSV", type="password")
-    if admin_pass:
-        if admin_pass == ADMIN_PASSWORD:
-            st.success("Password OK — download below")
-            if os.path.exists(CSV_FILE):
-                with open(CSV_FILE, "rb") as f:
-                    data_bytes = f.read()
-                st.download_button(
-                    label="📥 Download CSV",
-                    data=data_bytes,
-                    file_name=os.path.basename(CSV_FILE),
-                    mime="text/csv"
-                )
-            else:
-                st.warning("CSV file not found.")
-        else:
-            st.error("Incorrect password")
+    st.write("🔐 Admin Login")
+    admin_pass = st.text_input("Enter admin password", type="password")
+    is_admin = admin_pass == ADMIN_PASSWORD
+    if is_admin:
+        st.success("✅ Admin mode enabled.")
+        if os.path.exists(CSV_FILE):
+            with open(CSV_FILE, "rb") as f:
+                data_bytes = f.read()
+            st.download_button(
+                label="📥 Download CSV",
+                data=data_bytes,
+                file_name=os.path.basename(CSV_FILE),
+                mime="text/csv"
+            )
+    elif admin_pass:
+        st.error("Incorrect password")
+
+# ---------- Fixed Admin Banner ----------
+if is_admin:
+    st.markdown("""
+    <style>
+    .fixed-banner {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: #ffe6e6;
+        border-bottom: 3px solid #e53935;
+        color: #b71c1c;
+        font-weight: 600;
+        text-align: center;
+        padding: 10px;
+        z-index: 9999;
+        font-size: 16px;
+    }
+    body { padding-top: 50px; }
+    </style>
+    <div class="fixed-banner">
+        ⚠️ ADMIN MODE ACTIVE — Editing privileges are enabled. Proceed carefully.
+    </div>
+    """, unsafe_allow_html=True)
 
 # ---------- Main selection ----------
 st.subheader("Select Line and Bolt Torquing Number(s)")
@@ -138,9 +163,15 @@ else:
     auto_bolting_type = line_data["TYPE OF BOLTING"].dropna().astype(str).iloc[-1] if not line_data.empty else ""
     auto_supervisor = line_data["SUPERVISOR"].dropna().astype(str).iloc[-1] if not line_data.empty else ""
 
-    st.text_input("TEST PACK NUMBER (auto)", value=auto_test_pack, disabled=True)
-    st.text_input("TYPE OF BOLTING (auto)", value=auto_bolting_type, disabled=True)
-    st.text_input("SUPERVISOR (auto)", value=auto_supervisor, disabled=True)
+    if is_admin:
+        test_pack_input = st.text_input("TEST PACK NUMBER", value=auto_test_pack)
+        type_of_bolting_input = st.text_input("TYPE OF BOLTING", value=auto_bolting_type)
+        supervisor_input = st.text_input("SUPERVISOR", value=auto_supervisor)
+    else:
+        st.text_input("TEST PACK NUMBER (auto)", value=auto_test_pack, disabled=True)
+        st.text_input("TYPE OF BOLTING (auto)", value=auto_bolting_type, disabled=True)
+        st.text_input("SUPERVISOR (auto)", value=auto_supervisor, disabled=True)
+        test_pack_input, type_of_bolting_input, supervisor_input = auto_test_pack, auto_bolting_type, auto_supervisor
 
     # Step 3 — BOLT TORQUING NUMBER dropdown
     bolts_for_line = (
@@ -182,20 +213,23 @@ else:
                 row = selected_rows.iloc[0].copy()
 
                 torque_value = st.text_input("Torque Value", value=str(row.get("TORQUE VALUE", "")))
-                status = st.selectbox("Status", ["", "OK", "NOT OK", "PENDING"], index=0 if not row.get("STATUS") else (["", "OK", "NOT OK", "PENDING"].index(row.get("STATUS")) if row.get("STATUS") in ["OK","NOT OK","PENDING"] else 0))
+                status = st.selectbox("Status", ["", "OK", "NOT OK", "PENDING"],
+                                      index=0 if not row.get("STATUS") else
+                                      (["", "OK", "NOT OK", "PENDING"].index(row.get("STATUS"))
+                                       if row.get("STATUS") in ["OK","NOT OK","PENDING"] else 0))
                 remarks = st.text_area("Remarks", value=str(row.get("REMARKS", "")))
 
                 if st.button("Save Changes"):
                     df.at[row_idx, "DATE"] = date_input.strftime("%Y-%m-%d")
-                    df.at[row_idx, "SUPERVISOR"] = auto_supervisor
-                    df.at[row_idx, "TYPE OF BOLTING"] = auto_bolting_type
-                    df.at[row_idx, "TEST PACK NUMBER"] = auto_test_pack
+                    df.at[row_idx, "SUPERVISOR"] = supervisor_input
+                    df.at[row_idx, "TYPE OF BOLTING"] = type_of_bolting_input
+                    df.at[row_idx, "TEST PACK NUMBER"] = test_pack_input
                     df.at[row_idx, "TORQUE VALUE"] = torque_value
                     df.at[row_idx, "STATUS"] = status
                     df.at[row_idx, "REMARKS"] = remarks
                     try:
                         save_data(df)
-                        st.success("Changes saved successfully.")
+                        st.success("✅ Changes saved successfully.")
                     except Exception as e:
                         st.error(f"Failed to save: {e}")
             else:
@@ -203,4 +237,4 @@ else:
 
 # ---------- Footer ----------
 st.markdown("---")
-st.caption("KGP BOLT TORQUING TRACKER — View & Edit Existing Records Only.")
+st.caption("KGP BOLT TORQUING TRACKER — View & Edit (Admin Restricted).")
