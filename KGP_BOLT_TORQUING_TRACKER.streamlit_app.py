@@ -68,34 +68,45 @@ col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
 # ---------- Initialize Session ----------
+if "selected_line" not in st.session_state:
+    st.session_state.selected_line = None
 if "new_records" not in st.session_state:
     st.session_state.new_records = pd.DataFrame()
 
 # ---------- Main Form ----------
 st.subheader("Bolt Torquing Entry Form")
 
+# LINE NUMBER selection
+line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
+selected_line = st.selectbox(
+    "LINE NUMBER",
+    [""] + line_options,
+    index=([""] + line_options).index(st.session_state.selected_line) if st.session_state.selected_line in line_options else 0,
+    key="line",
+)
+
+# Refresh TEST PACK NO dynamically when LINE changes
+if selected_line != st.session_state.selected_line:
+    st.session_state.selected_line = selected_line
+    st.experimental_rerun()
+
+# TEST PACK NO (lookup from selected LINE NUMBER)
+testpack_options = []
+if selected_line and col_testpack and col_line in df.columns:
+    df_line = df[df[col_line] == selected_line]
+    testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
+
+default_testpack = testpack_options[0] if len(testpack_options) == 1 else ""
+selected_testpack = st.selectbox(
+    "TEST PACK NO",
+    [""] + testpack_options,
+    index=([""] + testpack_options).index(default_testpack) if default_testpack in testpack_options else 0,
+    key="testpack",
+)
+
+# FORM
 with st.form("bolt_form", clear_on_submit=True):
-    # LINE NUMBER
-    line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
-    selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
-
-    # TEST PACK NO - lookup based on selected LINE NUMBER
-    testpack_options = []
-    if selected_line and col_testpack and col_line in df.columns:
-        df_line = df[df[col_line] == selected_line]
-        testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
-
-    # Auto-select if only one test pack
-    default_testpack = testpack_options[0] if len(testpack_options) == 1 else ""
-
-    selected_testpack = st.selectbox(
-        "TEST PACK NO",
-        [""] + testpack_options,
-        index=([""] + testpack_options).index(default_testpack) if default_testpack in testpack_options else 0,
-        key="testpack"
-    )
-
-    # BOLT TORQUING NUMBER(S) (sorted ascending J1 → J200)
+    # BOLT TORQUING NUMBER(S) (sorted ascending J1→J200)
     bolt_options = sorted(
         df[col_bolt].dropna().unique().tolist(),
         key=lambda x: int(''.join(filter(str.isdigit, x))) if any(ch.isdigit() for ch in x) else 0
@@ -117,7 +128,7 @@ with st.form("bolt_form", clear_on_submit=True):
     status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="status")
     remarks_value = st.text_area("REMARKS", "", key="remarks")
 
-    # Submit button
+    # Submit
     submitted = st.form_submit_button("💾 Save Record")
 
 # ---------- Save Logic ----------
@@ -146,9 +157,9 @@ if submitted:
 
         st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
-        st.rerun()
+        st.experimental_rerun()
 
-# ---------- Show Records ----------
+# ---------- Show All Records ----------
 with st.expander("📋 All Records (Full History)", expanded=False):
     if os.path.exists(CSV_FILE):
         df_all = pd.read_csv(CSV_FILE)
