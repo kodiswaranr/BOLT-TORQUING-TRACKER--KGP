@@ -79,16 +79,15 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK NO filtered by LINE NUMBER
-    testpack_value = ""
+    # TEST PACK NO filtered based on selected LINE NUMBER
     testpack_options = []
     if selected_line and col_testpack and col_line in df.columns:
         df_line = df[df[col_line] == selected_line]
         testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
+
     selected_testpack = st.selectbox(
         "TEST PACK NO",
         [""] + testpack_options,
-        index=0 if not testpack_options else 1 if len(testpack_options) == 1 else 0,
         key="testpack"
     )
 
