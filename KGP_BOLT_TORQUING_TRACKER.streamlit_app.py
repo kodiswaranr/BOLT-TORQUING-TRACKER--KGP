@@ -1,3 +1,4 @@
+# KGP_BOLT_TORQUING_TRACKER.py
 import streamlit as st
 import pandas as pd
 import os
@@ -19,18 +20,24 @@ def load_logo_as_base64(path, width=80):
     return ""
 
 def read_data():
+    # If file missing, create an empty dataframe with expected headers to avoid crashes
     if not os.path.exists(CSV_FILE):
-        st.error(f"CSV file '{CSV_FILE}' not found in this folder.")
-        st.stop()
+        cols = [
+            "LINE NO", "TEST PACK NO", "BOLT TORQUING NUMBER(S)",
+            "TYPE OF BOLTING", "DATE", "SUPERVISOR", "STATUS", "REMARKS"
+        ]
+        return pd.DataFrame(columns=cols)
     df = pd.read_csv(CSV_FILE, dtype=str, keep_default_na=False)
     df.columns = df.columns.str.strip().str.upper()
     df = df.apply(lambda col: col.str.strip() if col.dtype == "object" else col)
     return df
 
 def save_data(df):
+    # Ensure folder exists (if running in environments where working dir might differ)
+    os.makedirs(os.path.dirname(os.path.abspath(CSV_FILE)), exist_ok=True)
     df.to_csv(CSV_FILE, index=False)
 
-# ✅ Natural sorting helper (J1 → J2 → J10 → J100 → J200)
+# Natural sorting helper (J1 -> J2 -> J10 -> J100 ...)
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
@@ -71,30 +78,50 @@ col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
 # ---------- Session State ----------
-if "selected_line" not in st.session_state:
-    st.session_state.selected_line = None
-if "selected_testpack" not in st.session_state:
-    st.session_state.selected_testpack = None
 if "new_records" not in st.session_state:
     st.session_state.new_records = pd.DataFrame()
 
 # ---------- UI ----------
 st.subheader("Bolt Torquing Entry Form")
 
-# LINE NUMBER Dropdown
-line_options = sorted([v for v in df[col_line].unique() if v.strip()], key=natural_sort_key) if col_line else []
-line_choice = st.selectbox("LINE NUMBER", line_options, key="selected_line")
+# Build LINE options (no blank)
+line_options = []
+if col_line:
+    line_options = sorted([v for v in df[col_line].unique() if str(v).strip()], key=natural_sort_key)
 
-# Filter TEST PACK options based on selected line
+# Ensure keys exist before using them
+if "selected_line" not in st.session_state:
+    st.session_state.selected_line = line_options[0] if line_options else ""
+
+# LINE selectbox (no blank option)
+if line_options:
+    line_choice = st.selectbox("LINE NUMBER", line_options, index=line_options.index(st.session_state.selected_line) if st.session_state.selected_line in line_options else 0, key="selected_line")
+else:
+    st.error("No LINE values found in CSV.")
+    st.stop()
+
+# TEST PACK NO options filtered by LINE
 testpack_options = []
-if line_choice and col_line and col_testpack:
+if col_testpack and col_line and line_choice:
     df_line = df[df[col_line] == line_choice]
-    testpack_options = sorted([v for v in df_line[col_testpack].unique() if v.strip()], key=natural_sort_key)
-selected_testpack = st.selectbox("TEST PACK NO", testpack_options, key="selected_testpack")
+    testpack_options = sorted([v for v in df_line[col_testpack].unique() if str(v).strip()], key=natural_sort_key)
+
+# Keep selected_testpack in session_state and default to first if available
+if "selected_testpack" not in st.session_state:
+    st.session_state.selected_testpack = testpack_options[0] if testpack_options else ""
+
+if testpack_options:
+    # ensure current selected_testpack is valid
+    if st.session_state.selected_testpack not in testpack_options:
+        st.session_state.selected_testpack = testpack_options[0]
+    selected_testpack = st.selectbox("TEST PACK NO", testpack_options, index=testpack_options.index(st.session_state.selected_testpack), key="selected_testpack")
+else:
+    selected_testpack = ""
+    st.warning("No TEST PACK NO options for selected LINE.")
 
 # ---------- Form ----------
 with st.form("entry_form", clear_on_submit=True):
-    # ✅ BOLT TORQUING NUMBER(S): Always show J1–J200 in natural order
+    # BOLT TORQUING NUMBER(S): always J1–J200 in natural order
     bolt_options = [f"J{i}" for i in range(1, 201)]
     selected_bolts = st.multiselect(
         "BOLT TORQUING NUMBER(S)",
@@ -102,15 +129,26 @@ with st.form("entry_form", clear_on_submit=True):
         key="form_bolts"
     )
 
-    type_options = sorted([v for v in df[col_type].dropna().unique() if v.strip()], key=str) if col_type else []
-    type_choice = st.selectbox("TYPE OF BOLTING", type_options, key="form_type")
+    type_options = sorted([v for v in df[col_type].dropna().unique() if str(v).strip()], key=str) if col_type else []
+    # if type_options is empty, still provide an empty selectbox would error; handle gracefully
+    if type_options:
+        type_choice = st.selectbox("TYPE OF BOLTING", type_options, index=0, key="form_type")
+    else:
+        type_choice = ""
+        st.text_input("TYPE OF BOLTING (no values found in CSV)", value="", key="form_type_text")
 
     date_choice = st.date_input("DATE", datetime.today().date(), key="form_date")
 
-    supervisor_options = sorted([v for v in df[col_supervisor].dropna().unique() if v.strip()], key=str) if col_supervisor else []
-    supervisor_choice = st.selectbox("SUPERVISOR", supervisor_options, key="form_supervisor")
+    supervisor_options = sorted([v for v in df[col_supervisor].dropna().unique() if str(v).strip()], key=str) if col_supervisor else []
+    if supervisor_options:
+        supervisor_choice = st.selectbox("SUPERVISOR", supervisor_options, index=0, key="form_supervisor")
+    else:
+        supervisor_choice = ""
+        st.text_input("SUPERVISOR (no values found in CSV)", value="", key="form_supervisor_text")
 
-    status_choice = st.selectbox("STATUS", ["OK", "NOT OK", "PENDING"], key="form_status")
+    status_choices = ["OK", "NOT OK", "PENDING"]
+    status_choice = st.selectbox("STATUS", status_choices, index=0, key="form_status")
+
     remarks_choice = st.text_area("REMARKS", "", key="form_remarks")
 
     save = st.form_submit_button("💾 Save Record")
@@ -121,59 +159,4 @@ if save:
     if not line_choice:
         errors.append("Please select LINE NUMBER.")
     if not selected_bolts:
-        errors.append("Please select at least one BOLT TORQUING NUMBER.")
-    if not selected_testpack:
-        errors.append("Please select TEST PACK NO.")
-
-    if errors:
-        for e in errors:
-            st.warning(e)
-    else:
-        new_rows = []
-        for bolt in selected_bolts:
-            r = {
-                col_line: line_choice,
-                col_testpack: selected_testpack,
-                "BOLT TORQUING NUMBER(S)": bolt,
-                col_type: type_choice,
-                col_date: date_choice.strftime("%Y-%m-%d"),
-                col_supervisor: supervisor_choice,
-                col_status: status_choice,
-                col_remarks: remarks_choice
-            }
-            new_rows.append(r)
-
-        new_df = pd.DataFrame(new_rows)
-        df_final = pd.concat([df, new_df], ignore_index=True)
-        save_data(df_final)
-        st.session_state.new_records = new_df
-
-        # ✅ Reset all form fields after saving
-        st.session_state.selected_line = None
-        st.session_state.selected_testpack = None
-        st.session_state.form_bolts = []
-        st.session_state.form_type = ""
-        st.session_state.form_date = datetime.today().date()
-        st.session_state.form_supervisor = ""
-        st.session_state.form_status = "OK"
-        st.session_state.form_remarks = ""
-
-        st.success(f"✅ {len(new_df)} record(s) saved successfully.")
-        st.rerun()
-
-# ---------- Recently Added ----------
-if not st.session_state.new_records.empty:
-    st.markdown("### 🆕 Recently Added Records")
-    st.dataframe(st.session_state.new_records, use_container_width=True)
-
-# ---------- Full History ----------
-with st.expander("📋 All Records (Full History)", expanded=False):
-    # Hide download button
-    st.markdown("<style>button[data-testid='stBaseButton-download']{display:none;}</style>", unsafe_allow_html=True)
-    df_all = read_data()
-    if col_date in df_all.columns:
-        df_all[col_date] = pd.to_datetime(df_all[col_date], errors="coerce")
-        df_all = df_all.sort_values(by=col_date, ascending=False)
-    st.dataframe(df_all, use_container_width=True)
-
-st.caption("© 2025 KGP BOLT TORQUING TRACKER")
+        errors.append("
