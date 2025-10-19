@@ -184,7 +184,7 @@ with st.expander("📋 All Records (Full History)", expanded=False):
         df_all = df_all.iloc[::-1]
     st.dataframe(df_all, use_container_width=True)
 
-# ---------- Secure Export ----------
+# ---------- Secure Export (Password Required) ----------
 with st.expander("🔒 Secure Data Export"):
     entered_password = st.text_input("Enter export password", type="password")
     if entered_password == EXPORT_PASSWORD:
