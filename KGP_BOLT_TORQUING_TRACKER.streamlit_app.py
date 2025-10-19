@@ -4,11 +4,14 @@ import pandas as pd
 import os
 import base64
 from datetime import datetime
+import io
+import zipfile
 
 # ---------- Config ----------
 CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must be in same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
+EXPORT_PASSWORD = "KGP@2025"  # Fixed hidden password for ZIP export
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
@@ -68,13 +71,6 @@ col_supervisor = find_col(["SUPERVISOR"])
 col_torque = find_col(["TORQUE VALUE", "TORQUE"])
 col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
-
-# ---------- Sidebar ----------
-with st.sidebar:
-    st.header("Quick Stats")
-    st.write(f"Total Records: {len(df)}")
-    if col_bolt:
-        st.write(f"Unique Bolt Numbers: {df[col_bolt].nunique()}")
 
 # ---------- Initialize Session State ----------
 if "new_records" not in st.session_state:
@@ -141,11 +137,15 @@ if submitted:
             })
 
         new_df = pd.DataFrame(new_rows)
+        # Add new rows
         df2 = pd.concat([df, new_df], ignore_index=True)
         save_data(df2)
 
+        # Show newly added records
         st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
+
+        # Force refresh to clear form
         st.rerun()
 
 # ---------- Display Newly Added Records ----------
@@ -153,5 +153,20 @@ if not st.session_state.new_records.empty:
     st.markdown("### 🆕 Recently Added Records")
     st.dataframe(st.session_state.new_records, use_container_width=True)
 
+    # Prepare password-protected ZIP for download
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.setpassword(bytes(EXPORT_PASSWORD, "utf-8"))
+        zf.writestr("Recently_Added_Records.csv", st.session_state.new_records.to_csv(index=False))
+    zip_buffer.seek(0)
+
+    # Hidden download option (user needs to know it's available)
+    st.download_button(
+        "⬇️ Download Recently Added Records (ZIP)",
+        data=zip_buffer,
+        file_name=f"Recently_Added_Records_{datetime.today().strftime('%Y%m%d')}.zip",
+        mime="application/zip",
+    )
+
 st.markdown("---")
-st.caption("© 2025 KGP BOLT TORQUING TRACKER — Secure Internal Data Only")
+st.caption("© 2025 KGP BOLT TORQUING TRACKER — Secure Export Enabled")
