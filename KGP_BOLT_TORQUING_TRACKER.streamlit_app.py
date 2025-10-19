@@ -1,22 +1,16 @@
-# KGP_BOLT_TORQUING_TRACKER.py
 import streamlit as st
 import pandas as pd
 import os
 import base64
 from datetime import datetime
-from io import BytesIO
-import zipfile
-import re
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"
+CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must be in same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
-EXPORT_PASSWORD = "KGP2025"  # hidden password for export
 
-# ---------- Helper Functions ----------
+# ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
-    """Convert logo image to base64 for embedding."""
     if os.path.exists(path):
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -24,41 +18,16 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
     return ""
 
 def read_data():
-    """Read or create the main CSV file."""
     if not os.path.exists(CSV_FILE):
-        cols = [
-            "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
-            "TYPE OF BOLTING", "DATE", "SUPERVISOR",
-            "STATUS", "REMARKS"
-        ]
-        pd.DataFrame(columns=cols).to_csv(CSV_FILE, index=False)
+        st.error(f"CSV file '{CSV_FILE}' not found. Please place it in this folder.")
+        st.stop()
     df = pd.read_csv(CSV_FILE)
     df.columns = df.columns.str.strip().str.upper()
     df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
     return df
 
 def save_data(df: pd.DataFrame):
-    """Save all data and also create daily backup."""
     df.to_csv(CSV_FILE, index=False)
-    today = datetime.today().strftime("%Y-%m-%d")
-    daily_file = f"BOLT TORQING TRACKING_{today}.csv"
-    df.to_csv(daily_file, index=False)
-
-def create_password_protected_zip(df, filename, password):
-    """Generate a ZIP file with password protection."""
-    buffer = BytesIO()
-    temp_csv = f"{filename}.csv"
-    df.to_csv(temp_csv, index=False)
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.setpassword(password.encode())
-        zf.write(temp_csv, arcname=os.path.basename(temp_csv))
-    os.remove(temp_csv)
-    buffer.seek(0)
-    return buffer
-
-def natural_sort_key(s):
-    """Sort strings naturally (J1 < J2 < J10)."""
-    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 # ---------- Page Setup ----------
 st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
@@ -82,7 +51,7 @@ st.markdown(
 # ---------- Load Data ----------
 df = read_data()
 
-# ---------- Detect Columns ----------
+# ---------- Column Detection ----------
 def find_col(possible_names):
     for name in possible_names:
         if name in df.columns:
@@ -98,7 +67,7 @@ col_supervisor = find_col(["SUPERVISOR"])
 col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
-# ---------- Initialize State ----------
+# ---------- Initialize Session State ----------
 if "new_records" not in st.session_state:
     st.session_state.new_records = pd.DataFrame()
 
@@ -108,9 +77,9 @@ st.subheader("Bolt Torquing Entry Form")
 with st.form("bolt_form", clear_on_submit=True):
     # LINE NUMBER
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
-    selected_line = st.selectbox("LINE NUMBER", line_options)
+    selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK (auto-fill)
+    # TEST PACK (auto-detect)
     testpack_value = ""
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
@@ -119,35 +88,37 @@ with st.form("bolt_form", clear_on_submit=True):
             testpack_value = testpacks[0]
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
-    # BOLT TORQUING NUMBER(S) — natural ascending sort
+    # BOLT TORQUING NUMBERS (multi-select, sorted ascending like J1→J200)
+    bolt_options = []
     if col_bolt:
         bolt_options = df[col_bolt].dropna().unique().tolist()
-        bolt_options = sorted(bolt_options, key=natural_sort_key)
-    else:
-        bolt_options = []
-    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options)
+        try:
+            bolt_options = sorted(
+                bolt_options,
+                key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else x
+            )
+        except Exception:
+            bolt_options = sorted(bolt_options)
+    selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options, key="bolts")
 
     # TYPE OF BOLTING
     type_options = sorted(df[col_type].dropna().unique().tolist()) if col_type else []
-    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options)
+    type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options, key="type")
 
     # DATE
-    date_selected = st.date_input("DATE", value=datetime.today().date())
+    date_selected = st.date_input("DATE", value=datetime.today().date(), key="date")
 
     # SUPERVISOR
     sup_options = sorted(df[col_supervisor].dropna().unique().tolist()) if col_supervisor else []
-    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options)
+    supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options, key="supervisor")
 
-    # STATUS
-    status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"])
+    # OTHER FIELDS
+    status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"], key="status")
+    remarks_value = st.text_area("REMARKS", "", key="remarks")
 
-    # REMARKS
-    remarks_value = st.text_area("REMARKS", "")
-
-    # Submit
+    # Submit button
     submitted = st.form_submit_button("💾 Save Record")
 
-# ---------- Handle Submission ----------
 if submitted:
     if not selected_line:
         st.warning("Please select a LINE NUMBER.")
@@ -168,41 +139,34 @@ if submitted:
             })
 
         new_df = pd.DataFrame(new_rows)
-        df_all = pd.concat([df, new_df], ignore_index=True)
-        save_data(df_all)
+        df2 = pd.concat([df, new_df], ignore_index=True)
+        save_data(df2)
+
         st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
+
         st.rerun()
 
 # ---------- Show All Records (Full History, Newest on Top) ----------
 with st.expander("📋 All Records (Full History)", expanded=False):
+    # Hide the "Download CSV" button inside dataframe UI
+    hide_download_css = """
+        <style>
+        button[data-testid="stBaseButton-download"] {
+            display: none;
+        }
+        </style>
+    """
+    st.markdown(hide_download_css, unsafe_allow_html=True)
+
     df_all = read_data()
     if col_date in df_all.columns:
         df_all[col_date] = pd.to_datetime(df_all[col_date], errors="coerce")
         df_all = df_all.sort_values(by=col_date, ascending=False)
     else:
         df_all = df_all.iloc[::-1]
-    st.dataframe(df_all, use_container_width=True)
 
-# ---------- Secure Export (Password Required) ----------
-with st.expander("🔒 Secure Data Export"):
-    entered_password = st.text_input("Enter export password", type="password")
-    if entered_password == EXPORT_PASSWORD:
-        df_export = read_data()
-        if col_date in df_export.columns:
-            df_export[col_date] = pd.to_datetime(df_export[col_date], errors="coerce")
-            df_export = df_export.sort_values(by=col_date, ascending=False)
-        else:
-            df_export = df_export.iloc[::-1]
-        zip_buffer = create_password_protected_zip(df_export, "KGP_BOLT_TRACKING_EXPORT", EXPORT_PASSWORD)
-        st.download_button(
-            label="📦 Download Encrypted Data (ZIP)",
-            data=zip_buffer,
-            file_name="KGP_BOLT_TRACKING_EXPORT.zip",
-            mime="application/zip"
-        )
-    elif entered_password:
-        st.error("Incorrect password.")
+    st.dataframe(df_all, use_container_width=True)
 
 st.markdown("---")
 st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
