@@ -150,18 +150,9 @@ if save:
 
         st.success(f"✅ {len(new_df)} record(s) saved successfully.")
 
-        # ✅ Clear all fields after save
-        for key in [
-            "selected_line",
-            "selected_testpack",
-            "form_bolts",
-            "form_type",
-            "form_date",
-            "form_supervisor",
-            "form_status",
-            "form_remarks",
-        ]:
-            if key in st.session_state:
+        # ✅ Completely clear all fields after save
+        for key in list(st.session_state.keys()):
+            if key.startswith("form_") or key in ["selected_line", "selected_testpack"]:
                 del st.session_state[key]
 
         st.rerun()
