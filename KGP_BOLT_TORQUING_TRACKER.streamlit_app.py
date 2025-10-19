@@ -10,9 +10,6 @@ CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must be in same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
-DEFAULT_ADMIN_PASSWORD = "Admin@1234"
-ADMIN_PASSWORD = os.environ.get("BOLT_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
-
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
     if os.path.exists(path):
@@ -74,20 +71,10 @@ col_remarks = find_col(["REMARKS"])
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    st.header("Quick Stats & Admin")
+    st.header("Quick Stats")
     st.write(f"Total Records: {len(df)}")
     if col_bolt:
         st.write(f"Unique Bolt Numbers: {df[col_bolt].nunique()}")
-
-    st.markdown("---")
-    st.write("🔐 Admin Access")
-    admin_pass = st.text_input("Enter admin password", type="password")
-    if admin_pass:
-        if admin_pass == ADMIN_PASSWORD:
-            st.success("Access granted ✅")
-            st.info("Admin privileges active (no download option).")
-        else:
-            st.error("Incorrect password ❌")
 
 # ---------- Initialize Session State ----------
 if "new_records" not in st.session_state:
@@ -167,4 +154,4 @@ if not st.session_state.new_records.empty:
     st.dataframe(st.session_state.new_records, use_container_width=True)
 
 st.markdown("---")
-st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
+st.caption("© 2025 KGP BOLT TORQUING TRACKER")
