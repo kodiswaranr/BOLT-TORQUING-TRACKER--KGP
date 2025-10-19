@@ -6,11 +6,9 @@ import base64
 from datetime import datetime
 import io
 import zipfile
-from pathlib import Path
 
 # ---------- Config ----------
 CSV_FILE = "BOLT TORQING TRACKING.csv"  # CSV must be in same folder
-BACKUP_DIR = "backup"
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
@@ -35,13 +33,7 @@ def read_data():
     return df
 
 def save_data(df: pd.DataFrame):
-    """Save main file and create a timestamped backup automatically."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    backup_path = Path(BACKUP_DIR) / f"BOLT_TORQUING_TRACKING_{timestamp}.csv"
     df.to_csv(CSV_FILE, index=False)
-    df.to_csv(backup_path, index=False)
-    return str(backup_path)
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
@@ -189,9 +181,10 @@ if selected_line:
 
             new_df = pd.DataFrame(new_rows)
             df_updated = pd.concat([df, new_df], ignore_index=True)
-            backup_path = save_data(df_updated)
+            save_data(df_updated)
             st.success(f"{len(selected_bolts)} record(s) saved successfully!")
-            st.info(f"🔒 Backup created: {backup_path}")
+
+            # Clear form (simulated)
             st.experimental_rerun()
 
 st.markdown("---")
