@@ -3,15 +3,12 @@ import streamlit as st
 import pandas as pd
 import os
 import base64
-import io
-import zipfile
 from datetime import datetime
 
 # ---------- Config ----------
 CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must be in same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
-DOWNLOAD_PASSWORD = "KGP@2025"  # 🔐 Change this password if needed
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
@@ -156,26 +153,5 @@ if not st.session_state.new_records.empty:
     st.markdown("### 🆕 Recently Added Records")
     st.dataframe(st.session_state.new_records, use_container_width=True)
 
-    # Password-protected download option
-    with st.expander("🔐 Export Recently Added Records (Password Protected)"):
-        password = st.text_input("Enter Export Password", type="password")
-        if password:
-            if password == DOWNLOAD_PASSWORD:
-                csv_buffer = io.BytesIO()
-                # Create a ZIP file with password
-                with zipfile.ZipFile(csv_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-                    csv_data = st.session_state.new_records.to_csv(index=False).encode("utf-8")
-                    zipf.writestr("recent_records.csv", csv_data)
-                csv_buffer.seek(0)
-                st.download_button(
-                    label="📥 Download Encrypted CSV (ZIP)",
-                    data=csv_buffer,
-                    file_name="recent_records_protected.zip",
-                    mime="application/zip"
-                )
-                st.info("✅ File ready — ZIP password: " + DOWNLOAD_PASSWORD)
-            else:
-                st.error("❌ Incorrect password")
-
 st.markdown("---")
-st.caption("© 2025 KGP BOLT TORQUING TRACKER")
+st.caption("© 2025 KGP BOLT TORQUING TRACKER — Secure Internal Data Only")
