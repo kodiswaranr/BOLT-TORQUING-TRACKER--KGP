@@ -6,7 +6,7 @@ import base64
 from datetime import datetime
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # Must be in same folder
+CSV_FILE = "BOLT TORQING TRACKING.csv"  # File must exist in same folder
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
 
@@ -15,6 +15,7 @@ ADMIN_PASSWORD = os.environ.get("BOLT_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
+    """Loads logo and returns HTML img tag."""
     if os.path.exists(path):
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -22,16 +23,18 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
     return ""
 
 def read_data():
+    """Reads CSV file and cleans column names."""
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
-        # Normalize column names for safety
         df.columns = df.columns.str.strip().str.upper()
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        return df
     else:
-        df = pd.DataFrame()
-    return df
+        st.error(f"CSV file '{CSV_FILE}' not found in directory.")
+        st.stop()
 
 def save_data(df: pd.DataFrame):
+    """Saves DataFrame back to CSV."""
     df.to_csv(CSV_FILE, index=False)
 
 # ---------- Page setup ----------
@@ -43,7 +46,8 @@ right_logo_html = load_logo_as_base64(RIGHT_LOGO)
 
 st.markdown(
     f"""
-    <div style="background-color:#f5f7fb;padding:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+    <div style="background-color:#f5f7fb;padding:10px;border-radius:8px;
+    display:flex;justify-content:space-between;align-items:center;">
         <div>{left_logo_html}</div>
         <h1 style="text-align:center;color:#0c2d6b;">KGP BOLT TORQUING TRACKER</h1>
         <div>{right_logo_html}</div>
@@ -55,11 +59,7 @@ st.markdown(
 # ---------- Load Data ----------
 df = read_data()
 
-if df.empty:
-    st.error("CSV file not found or empty. Please upload 'BOLT TORQING TRACKING.csv'.")
-    st.stop()
-
-# ---------- Flexible column detection ----------
+# ---------- Flexible Column Detection ----------
 def find_col(possible_names):
     for name in possible_names:
         if name in df.columns:
@@ -78,28 +78,28 @@ col_remarks = find_col(["REMARKS"])
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    st.header("Quick Actions")
-    st.write("Records:", len(df))
+    st.header("Quick Stats & Admin")
+    st.write(f"Total Records: {len(df)}")
     if col_bolt:
-        st.write("Unique Bolt Numbers:", df[col_bolt].nunique())
+        st.write(f"Unique Bolt Numbers: {df[col_bolt].nunique()}")
 
     st.markdown("---")
-    st.write("🔐 Admin Login")
+    st.write("🔐 Admin Access")
     admin_pass = st.text_input("Enter admin password", type="password")
     if admin_pass:
         if admin_pass == ADMIN_PASSWORD:
-            st.success("Access granted")
+            st.success("Access granted ✅")
             if os.path.exists(CSV_FILE):
                 with open(CSV_FILE, "rb") as f:
                     st.download_button("📥 Download CSV", f, file_name=CSV_FILE)
         else:
-            st.error("Incorrect password")
+            st.error("Incorrect password ❌")
 
 # ---------- Main UI ----------
 st.subheader("Select Line and Bolt Torquing Number(s)")
 
 if not col_line:
-    st.error("Column 'LINE NUMBER' not found in CSV. Check your header names.")
+    st.error("Column for 'LINE NUMBER' not found in CSV.")
     st.stop()
 
 line_options = sorted(df[col_line].dropna().unique().tolist())
@@ -108,59 +108,65 @@ selected_line = st.selectbox("LINE NUMBER", line_options)
 if selected_line:
     df_line = df[df[col_line] == selected_line]
 
-    # Auto-detect test pack and show it
+    # Test Pack Display
     if col_testpack:
         testpacks = sorted(df_line[col_testpack].dropna().unique().tolist())
         if testpacks:
-            st.write(f"**TEST PACK NUMBER:** {', '.join(map(str, testpacks))}")
+            st.markdown(f"**TEST PACK NUMBER:** {', '.join(map(str, testpacks))}")
 
-    # Bolt number multi-select
+    # ✅ MULTISELECT BOLT TORQUING NUMBER(S)
     if col_bolt:
         bolt_options = sorted(df_line[col_bolt].dropna().unique().tolist())
         selected_bolts = st.multiselect("BOLT TORQUING NUMBER(S)", bolt_options)
     else:
         selected_bolts = []
+        st.warning("BOLT TORQUING NUMBER column not found in CSV.")
 
-    # Type of Bolting
+    # TYPE OF BOLTING
     if col_type:
         type_options = sorted(df[col_type].dropna().unique().tolist())
         type_selected = st.selectbox("TYPE OF BOLTING", [""] + type_options)
     else:
         type_selected = ""
 
-    # Date input
+    # DATE INPUT
     date_selected = st.date_input("DATE", value=datetime.today().date())
 
-    # Supervisor dropdown
+    # SUPERVISOR DROPDOWN
     if col_supervisor:
         sup_options = sorted(df[col_supervisor].dropna().unique().tolist())
         supervisor_selected = st.selectbox("SUPERVISOR", [""] + sup_options)
     else:
         supervisor_selected = ""
 
-    # Other inputs
+    # TORQUE, STATUS, REMARKS INPUTS
     torque_value = st.text_input("TORQUE VALUE", "")
     status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"])
     remarks_value = st.text_area("REMARKS", "")
 
-    # Save button
+    # ---------- Save New Record ----------
     if st.button("💾 Save Record"):
         new_row = {
-            col_line: selected_line,
-            col_testpack: testpacks[0] if col_testpack and testpacks else "",
-            col_bolt: ", ".join(selected_bolts),
-            col_type: type_selected,
-            col_date: date_selected.strftime("%Y-%m-%d"),
-            col_supervisor: supervisor_selected,
-            col_torque: torque_value,
-            col_status: status_value,
-            col_remarks: remarks_value
+            col_line or "LINE NUMBER": selected_line,
+            col_testpack or "TEST PACK NUMBER": testpacks[0] if testpacks else "",
+            col_bolt or "BOLT TORQUING NUMBER": ", ".join(selected_bolts),
+            col_type or "TYPE OF BOLTING": type_selected,
+            col_date or "DATE": date_selected.strftime("%Y-%m-%d"),
+            col_supervisor or "SUPERVISOR": supervisor_selected,
+            col_torque or "TORQUE VALUE": torque_value,
+            col_status or "STATUS": status_value,
+            col_remarks or "REMARKS": remarks_value
         }
+
+        # Add missing columns if needed
+        for c in new_row.keys():
+            if c not in df.columns:
+                df[c] = ""
 
         new_df = pd.DataFrame([new_row])
         df2 = pd.concat([df, new_df], ignore_index=True)
         save_data(df2)
-        st.success("Record saved successfully!")
+        st.success("✅ Record saved successfully!")
 
 st.markdown("---")
-st.caption("© KGP BOLT TORQUING TRACKER — Admin Restricted.")
+st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
