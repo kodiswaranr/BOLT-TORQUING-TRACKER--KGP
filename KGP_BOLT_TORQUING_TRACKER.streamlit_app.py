@@ -6,12 +6,13 @@ import base64
 from datetime import datetime
 from io import BytesIO
 import zipfile
+import re
 
 # ---------- Config ----------
 CSV_FILE = "BOLT TORQING TRACKING.csv"  # Master file
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
-EXPORT_PASSWORD = "KGP2025"  # 🔒 Hidden password for export ZIP
+EXPORT_PASSWORD = "KGP2025"  # Hidden export password
 
 # ---------- Helpers ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
@@ -50,6 +51,10 @@ def create_password_protected_zip(df, filename, password):
     os.remove(temp_csv)
     buffer.seek(0)
     return buffer
+
+# Natural sorting helper (handles J1 < J2 < J10 properly)
+def natural_sort_key(s):
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 # ---------- Page Setup ----------
 st.set_page_config(page_title="KGP BOLT TORQUING TRACKER", layout="wide")
@@ -111,14 +116,10 @@ with st.form("bolt_form", clear_on_submit=True):
             testpack_value = testpacks[0]
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
-    # BOLT TORQUING NUMBERS — shown in descending order
+    # BOLT TORQUING NUMBERS — shown in natural descending order (J200 → J1)
     if col_bolt:
         bolt_options = df[col_bolt].dropna().unique().tolist()
-        # Sort descending (numeric if possible, else alphabetic)
-        try:
-            bolt_options = sorted(bolt_options, key=lambda x: float(str(x)), reverse=True)
-        except:
-            bolt_options = sorted(bolt_options, reverse=True)
+        bolt_options = sorted(bolt_options, key=natural_sort_key, reverse=True)
     else:
         bolt_options = []
 
