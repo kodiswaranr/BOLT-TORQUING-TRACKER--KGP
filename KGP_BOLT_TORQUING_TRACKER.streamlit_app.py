@@ -9,13 +9,14 @@ import zipfile
 import re
 
 # ---------- Config ----------
-CSV_FILE = "BOLT TORQING TRACKING.csv"  # Master file
+CSV_FILE = "BOLT TORQING TRACKING.csv"  # Main CSV file
 LEFT_LOGO = "left_logo.png"
 RIGHT_LOGO = "right_logo.png"
-EXPORT_PASSWORD = "KGP2025"  # Hidden export password
+EXPORT_PASSWORD = "KGP2025"  # Hidden password for export
 
-# ---------- Helpers ----------
+# ---------- Helper Functions ----------
 def load_logo_as_base64(path: str, width: int = 80) -> str:
+    """Convert logo image to base64 for embedding."""
     if os.path.exists(path):
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -23,6 +24,7 @@ def load_logo_as_base64(path: str, width: int = 80) -> str:
     return ""
 
 def read_data():
+    """Read or create the main CSV file."""
     if not os.path.exists(CSV_FILE):
         cols = [
             "LINE NUMBER", "TEST PACK NUMBER", "BOLT TORQUING NUMBER",
@@ -36,12 +38,14 @@ def read_data():
     return df
 
 def save_data(df: pd.DataFrame):
+    """Save all data and also create daily backup."""
     df.to_csv(CSV_FILE, index=False)
     today = datetime.today().strftime("%Y-%m-%d")
     daily_file = f"BOLT TORQING TRACKING_{today}.csv"
     df.to_csv(daily_file, index=False)
 
 def create_password_protected_zip(df, filename, password):
+    """Generate a ZIP file with password protection."""
     buffer = BytesIO()
     temp_csv = f"{filename}.csv"
     df.to_csv(temp_csv, index=False)
@@ -52,8 +56,8 @@ def create_password_protected_zip(df, filename, password):
     buffer.seek(0)
     return buffer
 
-# Natural sorting helper (handles J1 < J2 < J10 properly)
 def natural_sort_key(s):
+    """Sort strings naturally (J1 < J2 < J10)."""
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 # ---------- Page Setup ----------
@@ -78,7 +82,7 @@ st.markdown(
 # ---------- Load Data ----------
 df = read_data()
 
-# ---------- Column Detection ----------
+# ---------- Detect Columns ----------
 def find_col(possible_names):
     for name in possible_names:
         if name in df.columns:
@@ -95,11 +99,11 @@ col_torque = find_col(["TORQUE VALUE", "TORQUE"])
 col_status = find_col(["STATUS"])
 col_remarks = find_col(["REMARKS"])
 
-# ---------- Initialize Session ----------
+# ---------- Initialize State ----------
 if "new_records" not in st.session_state:
     st.session_state.new_records = pd.DataFrame()
 
-# ---------- Main UI ----------
+# ---------- Main Form ----------
 st.subheader("Bolt Torquing Entry Form")
 
 with st.form("bolt_form", clear_on_submit=True):
@@ -107,7 +111,7 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options)
 
-    # TEST PACK
+    # TEST PACK (auto-fill)
     testpack_value = ""
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
@@ -116,10 +120,10 @@ with st.form("bolt_form", clear_on_submit=True):
             testpack_value = testpacks[0]
             st.write(f"**TEST PACK NUMBER:** {testpack_value}")
 
-    # BOLT TORQUING NUMBERS — shown in natural ASCENDING order (J1 → J200)
+    # BOLT TORQUING NUMBER(S) — natural ascending sort
     if col_bolt:
         bolt_options = df[col_bolt].dropna().unique().tolist()
-        bolt_options = sorted(bolt_options, key=natural_sort_key)  # ascending order
+        bolt_options = sorted(bolt_options, key=natural_sort_key)
     else:
         bolt_options = []
 
@@ -141,9 +145,9 @@ with st.form("bolt_form", clear_on_submit=True):
     status_value = st.selectbox("STATUS", ["", "OK", "NOT OK", "PENDING"])
     remarks_value = st.text_area("REMARKS", "")
 
-    # Submit
     submitted = st.form_submit_button("💾 Save Record")
 
+# ---------- Handle Submission ----------
 if submitted:
     if not selected_line:
         st.warning("Please select a LINE NUMBER.")
@@ -171,9 +175,9 @@ if submitted:
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
         st.rerun()
 
-# ---------- Display All Records ----------
-st.markdown("### 📋 All Records (Full History)")
-st.dataframe(read_data(), use_container_width=True)
+# ---------- Show All Records (Collapsible View) ----------
+with st.expander("📋 All Records (Full History)", expanded=False):
+    st.dataframe(read_data(), use_container_width=True)
 
 # ---------- Secure Export ----------
 with st.expander("🔒 Secure Data Export"):
