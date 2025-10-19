@@ -91,15 +91,9 @@ with st.sidebar:
         else:
             st.error("Incorrect password ❌")
 
-# ---------- Initialize Session State for Clearing ----------
-if "form_submitted" not in st.session_state:
-    st.session_state.form_submitted = False
-
-def clear_form():
-    st.session_state.form_submitted = False
-    for key in list(st.session_state.keys()):
-        if key not in ["form_submitted"]:
-            st.session_state[key] = None
+# ---------- Initialize Session State ----------
+if "new_records" not in st.session_state:
+    st.session_state.new_records = pd.DataFrame()
 
 # ---------- Main Form ----------
 st.subheader("Bolt Torquing Entry Form")
@@ -162,18 +156,21 @@ if submitted:
             })
 
         new_df = pd.DataFrame(new_rows)
-        # Ensure columns align
-        for c in new_df.columns:
-            if c not in df.columns:
-                df[c] = ""
+        # Add new rows
         df2 = pd.concat([df, new_df], ignore_index=True)
         save_data(df2)
 
-        st.session_state.form_submitted = True
+        # Show newly added records
+        st.session_state.new_records = new_df
         st.success(f"✅ {len(selected_bolts)} record(s) saved successfully!")
 
-        # Force form reset
+        # Force refresh to clear form
         st.rerun()
+
+# ---------- Display Newly Added Records ----------
+if not st.session_state.new_records.empty:
+    st.markdown("### 🆕 Recently Added Records")
+    st.dataframe(st.session_state.new_records, use_container_width=True)
 
 st.markdown("---")
 st.caption("© 2025 KGP BOLT TORQUING TRACKER — Admin Restricted")
