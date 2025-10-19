@@ -79,14 +79,16 @@ with st.form("bolt_form", clear_on_submit=True):
     line_options = sorted(df[col_line].dropna().unique().tolist()) if col_line else []
     selected_line = st.selectbox("LINE NUMBER", line_options, key="line")
 
-    # TEST PACK (auto-detect)
+    # TEST PACK NUMBER (dropdown depending on LINE NUMBER)
     testpack_value = ""
+    testpack_options = []
     if col_testpack and selected_line:
         df_line = df[df[col_line] == selected_line]
-        testpacks = sorted(df_line[col_testpack].dropna().unique().tolist())
-        if testpacks:
-            testpack_value = testpacks[0]
-            st.write(f"**TEST PACK NUMBER:** {testpack_value}")
+        testpack_options = sorted(df_line[col_testpack].dropna().unique().tolist())
+    if testpack_options:
+        testpack_value = st.selectbox("TEST PACK NUMBER", testpack_options, key="testpack")
+    else:
+        st.warning("No TEST PACK NUMBER found for this LINE.")
 
     # BOLT TORQUING NUMBERS (multi-select, sorted ascending like J1→J200)
     bolt_options = []
@@ -124,6 +126,8 @@ if submitted:
         st.warning("Please select a LINE NUMBER.")
     elif not selected_bolts:
         st.warning("Please select at least one BOLT TORQUING NUMBER.")
+    elif not testpack_value:
+        st.warning("Please select a TEST PACK NUMBER.")
     else:
         new_rows = []
         for bolt in selected_bolts:
